@@ -2,12 +2,6 @@
   "version": 2,
   "name": "statplay-football",
   "buildCommand": "node set-backend-url.js",
-  "builds": [
-    {
-      "src": "index.html",
-      "use": "@vercel/static"
-    }
-  ],
   "routes": [
     {
       "src": "/sw.js",

@@ -23,9 +23,9 @@ if (!url) {
 const htmlPath = path.join(__dirname, 'index.html');
 let html = fs.readFileSync(htmlPath, 'utf8');
 
-// Reemplazar la URL del backend
+// Reemplazar la URL del backend — soporta asignación directa o con fallback (||)
 const updated = html.replace(
-  /window\.__BACKEND_URL__\s*=\s*['"][^'"]*['"]/,
+  /window\.__BACKEND_URL__\s*=\s*(window\.__BACKEND_URL__\s*\|\|\s*)?['"][^'"]*['"]/,
   `window.__BACKEND_URL__ = '${url}'`
 );
 
