@@ -5,7 +5,6 @@
   "private": true,
   "scripts": {
     "start": "node server/index.js",
-    "build": "node set-backend-url.js",
     "dev": "npx serve ."
   },
   "keywords": [
