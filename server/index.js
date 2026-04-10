@@ -68,6 +68,19 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// Ruta de bienvenida (Root) — Evita el mensaje "Cannot GET /" en Railway
+app.get('/', (req, res) => {
+  res.send(`
+    <div style="font-family: sans-serif; text-align: center; padding: 50px;">
+      <h1>StatPlay Football — API</h1>
+      <p style="color: #666;">El servidor backend está funcionando correctamente.</p>
+      <hr style="max-width: 400px; margin: 20px auto; border: 0; border-top: 1px solid #eee;">
+      <p>Accede a la aplicación principal a través de tu dominio de <strong>Vercel</strong>.</p>
+      <code style="background: #f4f4f4; padding: 5px 10px; border-radius: 4px;">Status: ONLINE</code>
+    </div>
+  `);
+});
+
 /* ── Rate limiting — protege contra abuso y agotamiento de APIs externas ── */
 // General: 120 req/min por IP para todos los endpoints
 const generalLimiter = rateLimit({
@@ -706,3 +719,4 @@ const server = app.listen(PORT, () => {
     });
     initCron();
 });
+
