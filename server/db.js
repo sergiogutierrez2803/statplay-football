@@ -35,7 +35,7 @@ const pool = mysql.createPool({
 console.log('[DB CONFIG]', {
   host: process.env.MYSQLHOST,
   user: process.env.MYSQLUSER,
-  database: process.env.MYSQLNAME,
+  database: process.env.MYSQLDATABASE,
 });
 
 module.exports = pool;
