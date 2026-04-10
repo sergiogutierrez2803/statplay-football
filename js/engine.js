@@ -27,7 +27,12 @@ const LEAGUE_AVGS = {
 
 const PredictionEngine = {
 
-  async analyze(homeTeam, awayTeam, wcOptions = {}) {
+  async analyze(homeTeam, awayTeam, wcOptions = {}, backendPrediction = null) {
+    // Si la data viene precargada desde el backend canónico, actuar como adaptador (Phase 1)
+    if (backendPrediction && backendPrediction.probs) {
+      return this._adaptBackendData(backendPrediction);
+    }
+
     const h2h = await ApiService.getH2H(homeTeam.id, awayTeam.id);
 
     // Seleccionar promedios de liga correctos según la liga activa
@@ -58,6 +63,24 @@ const PredictionEngine = {
     const insight    = this._generateInsight(homeTeam, awayTeam, probs, goals, h2h, risk, halfTime);
 
     return { homeTeam, awayTeam, h2h, probs, goals, halfTime, over25, btts, corners, risk, confidence, insight };
+  },
+
+  /* ── Adaptador de Backend (FASE 1) ── */
+  _adaptBackendData(backendData) {
+    // Si los datos ya vienen calculados del backend, engine.js delega el trabajo pesado.
+    // Solo generamos el insight visual si el backend no lo trajo (para I18n local).
+    if (!backendData.insight && backendData.homeTeam && backendData.awayTeam) {
+      backendData.insight = this._generateInsight(
+        backendData.homeTeam,
+        backendData.awayTeam,
+        backendData.probs,
+        backendData.goals,
+        backendData.h2h,
+        backendData.risk,
+        backendData.halfTime
+      );
+    }
+    return backendData;
   },
 
   /* ── Dixon-Coles xG ── */
@@ -107,15 +130,16 @@ const PredictionEngine = {
   _weightedProbs(home, away, h2h, wcOptions = {}) {
     const hForm = this._formScore(home.form);
     const aForm = this._formScore(away.form);
-    // [FASE 7] H2H reducido para World Cup (menos partidos históricos relevantes)
-    const h2hMult  = (leagueKey === 'WORLD_CUP') ? 0.30 : (wcOptions.h2hWeight ?? 1.0);
-    const h2hTotal = h2h.hw + h2h.d + h2h.aw + 0.001;
-
+    
     // pos puede ser undefined si viene de DB sin ese campo — usar 10 como fallback neutro
     const homePos = home.pos || 10;
     const awayPos = away.pos || 10;
     const leagueKey = AppState.currentLeague || 'PL';
     const totalTeams = leagueKey === 'BL' ? 18 : leagueKey === 'WORLD_CUP' ? 32 : 20;
+
+    // [FASE 7] H2H reducido para World Cup (menos partidos históricos relevantes)
+    const h2hMult  = (leagueKey === 'WORLD_CUP') ? 0.30 : (wcOptions.h2hWeight ?? 1.0);
+    const h2hTotal = h2h.hw + h2h.d + h2h.aw + 0.001;
 
     const hScore =
       hForm               * 0.35 +

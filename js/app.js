@@ -130,7 +130,9 @@ const Router = {
               );
             }
 
-            AppState.analysisResult = result;
+            // [FASE 1] Pasar por el adaptador (Early Return Pattern)
+            AppState.analysisResult = await PredictionEngine.analyze(result.homeTeam, result.awayTeam, {}, result);
+
           } else {
             // Fallback: calcular con engine.js local usando datos de la DB
             const homeStats = await ApiService.getTeamStats(params.home.id);
