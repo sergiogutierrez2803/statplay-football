@@ -1,0 +1,2 @@
+[start]
+cmd = "node migrate.js && node index.js"

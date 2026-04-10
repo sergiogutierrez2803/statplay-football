@@ -1,0 +1,30 @@
+{
+  "name": "statplay-backend",
+  "version": "1.0.0",
+  "description": "StatPlay Football — Backend API (Express + MySQL)",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "seed": "node seed.js",
+    "sync": "node -e \"require('dotenv').config(); const {syncAllData}=require('./sync'); syncAllData().then(r=>{ console.log(JSON.stringify(r,null,2)); process.exit(0); });\"",
+    "migrate": "node migrate.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "axios": "^1.14.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.1",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.3.2",
+    "mysql2": "^3.20.0",
+    "node-cron": "^4.2.1",
+    "node-fetch": "^2.7.0"
+  }
+}

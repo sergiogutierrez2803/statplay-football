@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Copa Mundial 2026">
+  <title>Copa Mundial 2026</title>
+  <!-- Placeholder oficial hasta que se coloque el SVG oficial de FIFA -->
+  <!-- Reemplazar este archivo con el SVG oficial de FIFA World Cup 2026 -->
+  <defs>
+    <linearGradient id="wc-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#C8A84B;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8B6914;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="wc-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0A0E1A;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1a2040;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Fondo -->
+  <rect width="200" height="200" rx="16" fill="url(#wc-bg)"/>
+
+  <!-- Trofeo simplificado -->
+  <g transform="translate(100,100)">
+    <!-- Copa -->
+    <path d="M-22,-45 Q-28,-20 -20,0 Q-12,18 0,22 Q12,18 20,0 Q28,-20 22,-45 Z"
+          fill="url(#wc-grad)" opacity="0.95"/>
+    <!-- Asas -->
+    <path d="M-22,-35 Q-42,-30 -38,-15 Q-34,0 -20,0" fill="none" stroke="url(#wc-grad)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M22,-35 Q42,-30 38,-15 Q34,0 20,0" fill="none" stroke="url(#wc-grad)" stroke-width="4" stroke-linecap="round"/>
+    <!-- Base -->
+    <rect x="-14" y="22" width="28" height="6" rx="2" fill="url(#wc-grad)"/>
+    <rect x="-20" y="28" width="40" height="5" rx="2" fill="url(#wc-grad)"/>
+  </g>
+
+  <!-- Texto FIFA WORLD CUP -->
+  <text x="100" y="158" text-anchor="middle" font-family="Arial, sans-serif"
+        font-size="10" font-weight="700" fill="#C8A84B" letter-spacing="2">
+    FIFA WORLD CUP
+  </text>
+  <!-- Año -->
+  <text x="100" y="173" text-anchor="middle" font-family="Arial, sans-serif"
+        font-size="14" font-weight="900" fill="#C8A84B" letter-spacing="3">
+    2026
+  </text>
+  <!-- Sedes -->
+  <text x="100" y="186" text-anchor="middle" font-family="Arial, sans-serif"
+        font-size="7" fill="#8B6914" letter-spacing="1">
+    USA · CANADA · MEXICO
+  </text>
+</svg>

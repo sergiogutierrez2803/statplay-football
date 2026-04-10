@@ -1,0 +1,22 @@
+{
+  "name": "statplay-football-root",
+  "version": "1.0.0",
+  "description": "StatPlay Football Platform",
+  "private": true,
+  "scripts": {
+    "start": "node server/index.js",
+    "build": "node set-backend-url.js",
+    "dev": "npx serve ."
+  },
+  "keywords": [
+    "football",
+    "analytics",
+    "predictions",
+    "pwa"
+  ],
+  "author": "StatPlay",
+  "license": "MIT",
+  "dependencies": {
+    "serve": "^14.2.1"
+  }
+}

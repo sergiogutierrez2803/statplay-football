@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="description" content="StatPlay Football — Análisis estadístico avanzado de partidos de Premier League con predicciones inteligentes basadas en datos reales." />
+  <meta name="theme-color" content="#0A0E1A" />
+  <title id="app-title">StatPlay Football — Football Analytics</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- SEO & Social -->
+  <link rel="manifest" href="manifest.json" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="StatPlay Football — Football Analytics" />
+  <meta property="og:description" content="Análisis predictivo avanzado de fútbol con inteligencia artificial. Análisis de Premier League, Bundesliga y más." />
+  <meta property="og:image" content="https://statplay-football.vercel.app/assets/og-preview.png" />
+  <meta property="og:url" content="https://statplay-football.vercel.app" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="StatPlay Football" />
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/animations.css" />
+</head>
+<body>
+  <!-- Pantalla de Login -->
+  <div id="auth-screen" class="auth-overlay" style="display:none;">
+    <div class="auth-card">
+
+      <!-- Logo -->
+      <div class="auth-logo">
+        <svg width="32" height="32" viewBox="0 0 64 64" fill="none">
+          <path d="M32 8 L38 20 L52 20 L42 29 L46 43 L32 34 L18 43 L22 29 L12 20 L26 20 Z" fill="#0A0E1A"/>
+        </svg>
+      </div>
+
+      <h1 class="auth-title">StatPlay</h1>
+      <p class="auth-subtitle">Análisis predictivo de fútbol.<br>Ingresa para continuar.</p>
+
+      <!-- Input email -->
+      <div class="auth-input-wrap">
+        <input
+          type="email"
+          id="auth-email-input"
+          class="auth-input"
+          placeholder="Ingresa tu correo"
+          autocomplete="email"
+          inputmode="email"
+        />
+      </div>
+
+      <!-- Error message -->
+      <div class="auth-error" id="auth-error-msg"></div>
+
+      <!-- Botón principal -->
+      <button class="auth-btn-primary" id="auth-btn-login">
+        Entrar
+      </button>
+
+      <!-- Separador -->
+      <div class="auth-divider"><span>o</span></div>
+
+      <!-- Botón invitado -->
+      <button class="auth-btn-guest" id="auth-btn-guest">
+        Entrar como invitado
+      </button>
+
+      <!-- Legal -->
+      <p class="auth-legal">
+        Al continuar aceptas el uso de datos para análisis estadístico.<br>
+        No se comparte información con terceros.
+      </p>
+
+      <!-- Selector de idioma -->
+      <div id="auth-lang-toggle" class="auth-lang-toggle" aria-label="Cambiar idioma">
+        <button data-lang="es" class="auth-lang-btn active">ES</button>
+        <span class="auth-lang-sep">|</span>
+        <button data-lang="en" class="auth-lang-btn">EN</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Splash Screen -->
+  <div id="splash-screen" class="splash">
+    <div class="splash-content">
+      <div class="splash-logo">
+        <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+          <circle cx="32" cy="32" r="30" stroke="url(#g1)" stroke-width="3"/>
+          <path d="M32 8 L38 20 L52 20 L42 29 L46 43 L32 34 L18 43 L22 29 L12 20 L26 20 Z" fill="url(#g1)"/>
+          <defs>
+            <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#00D4AA"/>
+              <stop offset="100%" stop-color="#5B6AF0"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <h1 class="splash-title">StatPlay</h1>
+      <span class="splash-subtitle">FOOTBALL ANALYTICS</span>
+      <div class="splash-loader">
+        <div class="splash-bar"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- App Shell -->
+  <div id="app" class="app hidden">
+    <!-- Header -->
+    <header class="app-header" id="app-header">
+      <div class="header-inner">
+        <div class="header-logo" id="btn-logo">
+          <svg width="28" height="28" viewBox="0 0 64 64" fill="none">
+            <circle cx="32" cy="32" r="30" stroke="url(#gh)" stroke-width="3"/>
+            <path d="M32 8 L38 20 L52 20 L42 29 L46 43 L32 34 L18 43 L22 29 L12 20 L26 20 Z" fill="url(#gh)"/>
+            <defs>
+              <linearGradient id="gh" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#00D4AA"/>
+                <stop offset="100%" stop-color="#5B6AF0"/>
+              </linearGradient>
+            </defs>
+          </svg>
+          <span>StatPlay</span>
+        </div>
+        <div class="header-live">
+          <span class="live-dot"></span>
+          <span class="live-text" id="header-league-name">Seleccionar Liga</span>
+        </div>
+        <button class="header-btn" id="btn-notifications" aria-label="Notificaciones">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+          </svg>
+        </button>
+        <!-- Selector de idioma — el texto se actualiza en boot via I18n.updateBtn() -->
+        <button class="header-btn lang-btn" id="btn-lang" aria-label="Cambiar idioma">
+          <span class="lang-prefix">Idioma:</span> EN
+        </button>
+        <!-- Botón cerrar sesión -->
+        <button class="header-btn" id="btn-logout" aria-label="Cerrar sesión" title="Cerrar sesión" style="display:none;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <main class="page-content" id="page-content">
+      <!-- Rendered dynamically -->
+    </main>
+
+    <!-- Bottom Nav -->
+    <nav class="bottom-nav" id="bottom-nav">
+      <button class="nav-item active" data-page="home" id="nav-home">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+          <polyline points="9 22 9 12 15 12 15 22"/>
+        </svg>
+        <span>Inicio</span>
+      </button>
+      <button class="nav-item" data-page="matches" id="nav-matches">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <polygon points="10 8 16 12 10 16 10 8"/>
+        </svg>
+        <span>Análisis</span>
+      </button>
+      <button class="nav-item" data-page="standings" id="nav-standings">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
+          <line x1="8" y1="18" x2="21" y2="18"/>
+          <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/>
+          <line x1="3" y1="18" x2="3.01" y2="18"/>
+        </svg>
+        <span>Tabla</span>
+      </button>
+      <button class="nav-item" data-page="about" id="nav-about">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <span>Info</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- JS -->
+  <script>
+    // URL del backend — cambiar en producción o usar meta tag
+    // En Vercel: añadir variable de entorno VITE_API_URL y reemplazar aquí
+    window.__BACKEND_URL__ = window.__BACKEND_URL__ || 'http://localhost:3000/api';
+
+    // FASE 4 — Sincronización de idioma ANTES del primer render
+    // Leer idioma guardado y aplicarlo al documento inmediatamente
+    (function() {
+      const lang = localStorage.getItem('statplay_lang') || 'es';
+      window.currentLang = lang;
+      document.documentElement.lang = lang;
+    })();
+
+    window.onerror = function(msg, url, line, col, error) {
+      console.error("GLB_ERR:", msg, line, col, error);
+      // Solo intentar loguear si el servidor está disponible
+      try {
+        fetch(window.__BACKEND_URL__ + "/log", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({msg, url, line, col})
+        }).catch(() => {}); // silenciar error si servidor no disponible
+      } catch(e) {}
+    };
+  </script>
+  <script src="js/data.js"></script>
+  <script src="js/teamLogoMap.js"></script>
+  <script src="js/nationalFlagMap.js"></script>
+  <script src="js/flagsMap.js"></script>
+  <script src="js/worldCupTeams.js"></script>
+  <script src="js/worldCupGroups.js"></script>
+  <script src="js/worldCupPredictor.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    // Guard: si TeamLogoMap no cargó correctamente, crear stub seguro
+    if (typeof TeamLogoMap === 'undefined') {
+      console.warn('[StatPlay] TeamLogoMap no disponible — usando fallback');
+      window.TeamLogoMap = {
+        getLogo:     function(name, dbLogo, crest) { return dbLogo || crest || null; },
+        getEmoji:    function() { return '⚽'; },
+        findByName:  function() { return null; },
+      };
+    }
+    // Guard: si NationalFlagMap no cargó correctamente, crear stub seguro
+    if (typeof NationalFlagMap === 'undefined') {
+      console.warn('[StatPlay] NationalFlagMap no disponible — usando fallback');
+      window.NationalFlagMap = {
+        getFlag:   function(name) { return 'https://flagcdn.com/w80/un.png'; },
+        getEmoji:  function() { return '🌍'; },
+        get:       function() { return null; },
+        has:       function() { return false; },
+        normalize: function(n) { return (n || '').toLowerCase().trim(); },
+      };
+    }
+    // Guard: si WorldCupTeams no cargó correctamente, crear stub seguro
+    if (typeof WorldCupTeams === 'undefined') {
+      console.warn('[StatPlay] WorldCupTeams no disponible — usando fallback');
+      window.WorldCupTeams = {
+        normalize:  function(n) { return n; },
+        find:       function() { return null; },
+        getFlag:    function() { return 'https://flagcdn.com/w80/un.png'; },
+        getEmoji:   function() { return '🌍'; },
+        getGroup:   function() { return []; },
+        getAllGroups: function() { return {}; },
+        validate:   function() { return { ok: false, errors: ['stub'] }; },
+        all:        [],
+      };
+    }
+    // Guard: si WorldCupGroups no cargó correctamente, crear stub seguro
+    if (typeof WorldCupGroups === 'undefined') {
+      console.warn('[StatPlay] WorldCupGroups no disponible — usando fallback');
+      window.WorldCupGroups = {
+        normalizeNationalTeamName: function(n) { return n; },
+        getGroup:                  function() { return null; },
+        getFlag:                   function() { return 'https://flagcdn.com/w80/un.png'; },
+        getEmoji:                  function() { return '🌍'; },
+        getGroupTeams:             function() { return []; },
+        getAllGroupsForStandings:   function() { return []; },
+        getAllTeams:                function() { return []; },
+        validate:                  function() { return { ok: false, errors: ['stub'] }; },
+        groups:                    {},
+      };
+    }
+    // Guard: si FlagsMap no cargó, crear stub seguro
+    if (typeof FlagsMap === 'undefined') {
+      console.warn('[StatPlay] FlagsMap no disponible — usando NationalFlagMap como fallback');
+      window.FlagsMap = {
+        normalizeNationalTeamName: function(n) {
+          return (typeof WorldCupGroups !== 'undefined')
+            ? WorldCupGroups.normalizeNationalTeamName(n)
+            : (n || '');
+        },
+        getFlag:          function(n) { return (typeof NationalFlagMap !== 'undefined') ? NationalFlagMap.getFlag(n) : 'https://flagcdn.com/w320/un.png'; },
+        getWorldCupLogo:  function() { return { src: 'https://media.api-sports.io/football/leagues/1.png', fallback: 'https://media.api-sports.io/football/leagues/1.png' }; },
+        flagImg:          function(n, alt) { return '<span>🌍</span>'; },
+        worldCupLogoImg:  function() { return '<span>🌍</span>'; },
+        hasFlag:          function() { return false; },
+        validateCoverage: function() { return []; },
+        DEFAULT_FLAG:     'https://flagcdn.com/w320/un.png',
+        WORLD_CUP_LOGO:   'https://media.api-sports.io/football/leagues/1.png',
+      };
+    }
+    // Guard: si WorldCupPredictionEngine no cargó, usar PredictionEngine como fallback
+    if (typeof WorldCupPredictionEngine === 'undefined') {
+      console.warn('[StatPlay] WorldCupPredictionEngine no disponible — usando PredictionEngine');
+      window.WorldCupPredictionEngine = null; // app.js detecta null y usa PredictionEngine
+    }
+  </script>
+  <script src="js/i18n.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+  <!-- PWA Registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(reg => console.log('[StatPlay] Service Worker registered:', reg.scope))
+          .catch(err => console.warn('[StatPlay] SW registration failed:', err));
+      });
+    }
+  </script>
+</body>
+</html>
