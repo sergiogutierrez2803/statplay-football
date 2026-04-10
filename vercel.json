@@ -2,26 +2,7 @@
   "version": 2,
   "name": "statplay-football",
   "buildCommand": "node set-backend-url.js",
-  "routes": [
-    {
-      "src": "/sw.js",
-      "dest": "/sw.js",
-      "headers": {
-        "Cache-Control": "no-cache, no-store, must-revalidate"
-      }
-    },
-    {
-      "src": "/manifest.json",
-      "dest": "/manifest.json",
-      "headers": {
-        "Cache-Control": "no-cache, no-store, must-revalidate"
-      }
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
-    }
-  ],
+  "outputDirectory": ".",
   "headers": [
     {
       "source": "/(.*)",
