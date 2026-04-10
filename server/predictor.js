@@ -141,10 +141,13 @@ function expectedGoals(home, away, h2h, ligaId) {
     xGA *= modifier;
   }
 
+  // [FASE 2] H2H desactivado en xG para preservar modelo Dixon-Coles puro
+  /*
   if (h2h?.goals?.length === 2) {
     xGH = xGH * 0.80 + h2h.goals[0] * 0.20;
     xGA = xGA * 0.80 + h2h.goals[1] * 0.20;
   }
+  */
 
   xGH = Math.max(0.35, Math.min(3.5, xGH));
   xGA = Math.max(0.35, Math.min(3.5, xGA));
@@ -182,31 +185,36 @@ function weightedProbs(home, away, h2h, ligaId) {
   const histH = hHistorico / histTotal;
   const histA = aHistorico / histTotal;
 
-  /* ── [M2] H2H con weight decay por antigüedad ──
-     Si el H2H tiene fecha y supera 24 meses, reducir su peso al 50%.
-     h2h.source='db_cache' puede incluir h2h.updatedAt si lo guardamos,
-     pero como no tenemos fecha de los partidos individuales, usamos
-     una heurística: si el H2H viene del fallback (hw=2,d=1,aw=2) → decay.
-     Si viene de API real con partidos recientes → peso completo. */
+  /* ── [M2] H2H con weight decay ultra conservador (FASE 2) ── */
   const h2hIsStale = h2h?.source === 'fallback' || (!h2h?.source && (h2h?.hw === 2 && h2h?.d === 1 && h2h?.aw === 2));
-  const H2H_WEIGHT = h2hIsStale ? 0.075 : 0.15; // 50% decay si es antiguo/fallback
-  const FORM_WEIGHT_ADJUSTED = 0.60 + (0.15 - H2H_WEIGHT); // redistribuir a forma
-  if (h2hIsStale) {
-    console.log(`[Predictor] [M2] H2H stale/fallback → weight decay: ${H2H_WEIGHT} (forma absorbe diferencia)`);
+  const h2hTotalMatches = h2h ? ((h2h.hw || 0) + (h2h.d || 0) + (h2h.aw || 0)) : 0;
+  
+  let H2H_WEIGHT = 0;
+  if (!h2hIsStale) {
+      if (h2hTotalMatches >= 3) H2H_WEIGHT = 0.06;
+      else if (h2hTotalMatches > 0) H2H_WEIGHT = 0.02;
+  }
+  
+  // Redistribución explícita
+  const HIST_WEIGHT = 0.25;
+  const FORM_WEIGHT = 1 - HIST_WEIGHT - H2H_WEIGHT; 
+
+  if (H2H_WEIGHT === 0) {
+    console.log(`[Predictor] [M2] H2H descartado (fallback o muestra nula). Form asume total: ${FORM_WEIGHT}`);
   }
 
-  const h2hT = (h2h?.hw || 0) + (h2h?.d || 0) + (h2h?.aw || 0) + 0.001;
+  const h2hT = h2hTotalMatches + 0.001;
   const h2hH = (h2h?.hw || 0) / h2hT;
   const h2hA = (h2h?.aw || 0) / h2hT;
   const h2hD = (h2h?.d  || 0) / h2hT;
 
   /* ── Combinar con pesos ajustados ── */
-  const hScore = formH * FORM_WEIGHT_ADJUSTED + histH * 0.25 + h2hH * H2H_WEIGHT;
-  const aScore = formA * FORM_WEIGHT_ADJUSTED + histA * 0.25 + h2hA * H2H_WEIGHT;
+  const hScore = formH * FORM_WEIGHT + histH * HIST_WEIGHT + h2hH * H2H_WEIGHT;
+  const aScore = formA * FORM_WEIGHT + histA * HIST_WEIGHT + h2hA * H2H_WEIGHT;
 
   const balance = 1 - Math.abs(hScore - aScore);
-  const dScore  = balance * 0.35 * FORM_WEIGHT_ADJUSTED
-    + (1 - Math.abs(histH - histA)) * 0.35 * 0.25
+  const dScore  = balance * 0.35 * FORM_WEIGHT
+    + (1 - Math.abs(histH - histA)) * 0.35 * HIST_WEIGHT
     + h2hD * H2H_WEIGHT;
 
   const sum = hScore + aScore + dScore;
@@ -231,25 +239,26 @@ function blendProbs(poissonP, weighted, ligaId, xGH = null, xGA = null, home = n
     away: blend.away * (1 - R) + base.away * R,
   };
 
-  /* [M3] Draw boost — se activa solo cuando:
-     1. Diferencia de xG < 0.6 (partido muy equilibrado en goles esperados)
-     2. Ambos equipos tienen avgGoalsFor < 1.6 (tendencia defensiva)
-     Fórmula: draw_boost = 1 / (1 + |xGH - xGA|)
-     El boost se suma al empate y se resta proporcionalmente de local/visitante. */
+  /* [M3] Draw boost fluid y prudente (FASE 2)
+     Sustituye heurísticas binarias por matemática de curva continua. */
   if (xGH !== null && xGA !== null && home && away) {
     const xgDiff = Math.abs(xGH - xGA);
-    const homeAvgGF = (home.homeGoalsFor + home.awayGoalsFor) / 2;
-    const awayAvgGF = (away.homeGoalsFor + away.awayGoalsFor) / 2;
-    const bothDefensive = homeAvgGF < 1.6 && awayAvgGF < 1.6;
-
-    if (xgDiff < 0.6 && bothDefensive) {
-      const drawBoost = (1 / (1 + xgDiff)) - 0.5; // rango ~0 a 0.5, escalado
-      const boostApplied = Math.min(0.04, drawBoost * 0.08); // máx +4% al empate
-      reg.draw += boostApplied;
-      // Redistribuir el boost restando mitad a cada lado
-      reg.home -= boostApplied / 2;
-      reg.away -= boostApplied / 2;
-      console.log(`[Predictor] [M3] Draw boost=${(boostApplied * 100).toFixed(1)}% (xgDiff=${xgDiff.toFixed(2)}, homeAvgGF=${homeAvgGF.toFixed(2)}, awayAvgGF=${awayAvgGF.toFixed(2)})`);
+    const xgTotal = xGH + xGA;
+    
+    // Penaliza fuertemente diferencias > 0.25 xG (se desploma la asintota)
+    const closenessFactor = 1 / (1 + Math.pow(xgDiff * 3.0, 2)); 
+    // Rango más modesto: 0 a ~0.45 si pronostican under 2.5 general
+    const scarcityFactor = Math.max(0, (2.6 - xgTotal) * 0.25); 
+    
+    // Escalado de impacto pequeño: boost teórico máximo raramente cruzará 0.035 (~3.5%)
+    const drawBoost = closenessFactor * scarcityFactor * 0.08; 
+    
+    // Solo aplicar si es perceptible y tiene sentido iterar
+    if (drawBoost > 0.005) {
+      reg.draw += drawBoost;
+      reg.home -= drawBoost / 2;
+      reg.away -= drawBoost / 2;
+      console.log(`[Predictor] [M3] Fluid Draw boost=${(drawBoost * 100).toFixed(1)}% (xgDiff=${xgDiff.toFixed(2)}, xgTotal=${xgTotal.toFixed(2)})`);
     }
   }
 
