@@ -223,6 +223,16 @@ const migrations = [
 
 async function runMigrations() {
   console.log('\n[Migrate] Iniciando migraciones...\n');
+  
+  // Validar conexión antes de empezar
+  try {
+    await pool.query('SELECT 1');
+  } catch (err) {
+    console.error(`[Migrate] ❌ Error de conexión inicial: ${err.message}`);
+    console.error('Asegúrate de que las variables de entorno de la base de datos son correctas.');
+    process.exit(1);
+  }
+
   let ok = 0;
   for (const m of migrations) {
     try {

@@ -9,23 +9,27 @@
  */
 
 const mysql = require('mysql2/promise');
-const path  = require('path');
+const path = require('path');
 require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
-const useSSL = process.env.NODE_ENV === 'production' || process.env.DB_SSL === 'true';
+const dbConfig = {
+  host:     process.env.DB_HOST || process.env.MYSQLHOST || 'localhost',
+  port:     process.env.DB_PORT || process.env.MYSQLPORT || 3306,
+  user:     process.env.DB_USER || process.env.MYSQLUSER || 'root',
+  password: process.env.DB_PASS || process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || '',
+  database: process.env.DB_NAME || process.env.MYSQLDATABASE || 'railway',
+};
+
+const useSSL = process.env.NODE_ENV === 'production' || process.env.DB_SSL === 'true' || !!process.env.MYSQLHOST;
 
 const pool = mysql.createPool({
-  host: process.env.MYSQLHOST,
-user: process.env.MYSQLUSER,
-password: process.env.MYSQLPASSWORD,
-database: process.env.MYSQLDATABASE,
-port: process.env.MYSQLPORT,
+  ...dbConfig,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
   charset: 'utf8mb4',
   timezone: '+00:00',
-  // SSL para Railway — rejectUnauthorized:false porque Railway usa cert autofirmado
   ...(useSSL ? { ssl: { rejectUnauthorized: false } } : {}),
 });
 
