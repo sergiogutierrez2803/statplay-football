@@ -16,11 +16,11 @@ const useSSL =
   process.env.DB_SSL === 'true';
 
 const pool = mysql.createPool({
-  host: process.env.MYSQL_HOST,
-  port: process.env.MYSQL_PORT || 3306,
-  user: process.env.MYSQL_USER,
-  password: process.env.MYSQL_ROOT_PASSWORD,
-  database: process.env.MYSQL_NAME,
+  host: process.env.MYSQLHOST,
+  port: process.env.MYSQLPORT || 3306,
+  user: process.env.MYSQLUSER,
+  password: process.env.MYSQLPASSWORD,
+  database: process.env.MYSQLNAME,
 
   waitForConnections: true,
   connectionLimit: 10,
@@ -33,9 +33,9 @@ const pool = mysql.createPool({
 
 // DEBUG REAL
 console.log('[DB CONFIG]', {
-  host: process.env.MYSQL_HOST,
-  user: process.env.MYSQL_USER,
-  database: process.env.MYSQL_NAME,
+  host: process.env.MYSQLHOST,
+  user: process.env.MYSQLUSER,
+  database: process.env.MYSQLNAME,
 });
 
 module.exports = pool;
