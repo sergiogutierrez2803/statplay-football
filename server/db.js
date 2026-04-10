@@ -13,15 +13,27 @@ const path = require('path');
 require('dotenv').config();
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
-const dbConfig = {
-  host:     process.env.DB_HOST || process.env.MYSQLHOST || 'localhost',
-  port:     process.env.DB_PORT || process.env.MYSQLPORT || 3306,
-  user:     process.env.DB_USER || process.env.MYSQLUSER || 'root',
-  password: process.env.DB_PASS || process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || '',
-  database: process.env.DB_NAME || process.env.MYSQLDATABASE || 'railway',
+// Resolución inteligente de identidad (Railway Underscore -> Railway Legacy -> StatPlay)
+const resolverAuth = () => {
+  const user = process.env.MYSQL_USER || process.env.MYSQLUSER || process.env.DB_USER || 'root';
+  // Si el usuario es root, usamos prioritariamente la variable ROOT_PASSWORD de Railway
+  const pass = (user === 'root')
+    ? (process.env.MYSQL_ROOT_PASSWORD || process.env.MYSQL_PASSWORD || process.env.MYSQLPASSWORD || process.env.DB_PASS || '')
+    : (process.env.MYSQL_PASSWORD || process.env.MYSQL__PASSWORD || process.env.MYSQLPASSWORD || process.env.DB_PASS || '');
+  return { user, pass };
 };
 
-const useSSL = process.env.NODE_ENV === 'production' || process.env.DB_SSL === 'true' || !!process.env.MYSQLHOST;
+const auth = resolverAuth();
+
+const dbConfig = {
+  host:     process.env.MYSQL_HOST || process.env.MYSQLHOST || process.env.DB_HOST || 'localhost',
+  port:     process.env.MYSQL_PORT || process.env.MYSQLPORT || process.env.DB_PORT || 3306,
+  user:     auth.user,
+  password: auth.pass,
+  database: process.env.MYSQL_DATABASE || process.env.MYSQLDATABASE || process.env.DB_NAME || 'railway',
+};
+
+const useSSL = process.env.NODE_ENV === 'production' || process.env.DB_SSL === 'true' || !!process.env.MYSQLHOST || !!process.env.MYSQL_HOST;
 
 const pool = mysql.createPool({
   ...dbConfig,
@@ -33,7 +45,7 @@ const pool = mysql.createPool({
   ...(useSSL ? { ssl: { rejectUnauthorized: false } } : {}),
 });
 
-// Log de configuración al arrancar
-console.log(`[DB] Pool creado → ${process.env.DB_HOST}/${process.env.DB_NAME} | SSL: ${useSSL ? 'ON' : 'OFF'}`);
+// Log de configuración al arrancar (muestra los valores resueltos)
+console.log(`[DB] Pool creado → ${dbConfig.host}:${dbConfig.port}/${dbConfig.database} | SSL: ${useSSL ? 'ON' : 'OFF'}`);
 
 module.exports = pool;
