@@ -24,7 +24,7 @@
  */
 
 /* ── Función de normalización ── */
-module.exports = {
+
 function normalizeName(name) {
   if (!name) return '';
   return name
@@ -376,5 +376,11 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = { findByName, getLogo, getEmoji, normalizeName, normalizeNationalTeamName };
 } else if (typeof window !== 'undefined') {
   window.TeamLogoMap = { findByName, getLogo, getEmoji, normalizeName, normalizeNationalTeamName };
-}
+};
+module.exports = {
+  findByName,
+  getLogo,
+  getEmoji,
+  normalizeName,
+  normalizeNationalTeamName
 };
