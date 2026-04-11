@@ -40,6 +40,7 @@ function parseId(val) {
 }
 
 const app  = express();
+app.set('trust proxy', 1);
 
 // CORS: soporta múltiples orígenes separados por coma en ALLOWED_ORIGINS.
 // También acepta *.vercel.app en staging para preview deployments.
