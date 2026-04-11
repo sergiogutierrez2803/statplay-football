@@ -301,46 +301,82 @@ function formConsistency(form = []) {
   return 1 - Math.min(1, variance * 2);
 }
 
-function confidence(probs, home, away, h2h, fuentesUsadas, ligaId, poissonP = null, weightedP = null) {
+function confidence(probs, home, away, h2h, fuentesUsadas, ligaId, poissonP = null, weightedP = null, dataContext = {}) {
   const avgs = LEAGUE_AVGS[ligaId] || LEAGUE_AVGS.PL;
-  const maxP    = Math.max(probs.home, probs.draw, probs.away) / 100;
-  const hCons   = formConsistency(home.form);
-  const aCons   = formConsistency(away.form);
-  const sample  = Math.min(1, ((h2h?.hw || 0) + (h2h?.d || 0) + (h2h?.aw || 0)) / 5);
+  const maxP = Math.max(probs.home, probs.draw, probs.away) / 100;
+  const hCons = formConsistency(home.form);
+  const aCons = formConsistency(away.form);
   const posDiff = Math.abs(home.pos - away.pos) / (avgs.totalTeams - 1);
 
-  const sourceBonus = fuentesUsadas === 'fd+apif' ? 0.06 : fuentesUsadas === 'fd' || fuentesUsadas === 'apif' ? 0.03 : 0;
-  const formPenalty = (home.form.length < 3 || away.form.length < 3) ? -0.05 : 0;
+  const sourceBonus = fuentesUsadas === 'fd+apif' ? 0.05 : fuentesUsadas === 'fd' || fuentesUsadas === 'apif' ? 0.02 : 0;
 
-  /* [M5] Confidence penalty por divergencia entre modelos.
-     Si Poisson y Weighted difieren más de 12 puntos en el resultado más probable,
-     los modelos están en desacuerdo → reducir confianza proporcionalmente.
-     Fórmula: penalty = divergence * 0.5 (en puntos porcentuales)
-     Mínimo final: 45% */
+  // 1. Diagnóstico Estructurado de Calidad (No lineal, Topado)
+  let warnings = [];
+  let dataQualityPts = 100;
+  let rawPenaltyAcc = 0;
+
+  // H2H Evaluativo (sin data falsa de fallback)
+  const h2hSampleMatches = dataContext.h2hIsStale ? 0 : ((h2h?.hw || 0) + (h2h?.d || 0) + (h2h?.aw || 0));
+  const h2hSampleBonus = Math.min(1, h2hSampleMatches / 5) * 0.15; 
+
+  if (dataContext.h2hIsStale) {
+    warnings.push("Stale/Fallback H2H data");
+    dataQualityPts -= 15;
+    rawPenaltyAcc -= 0.05;
+  } else if (h2hSampleMatches < 3) {
+    warnings.push("Weak historical H2H sample");
+    dataQualityPts -= 5;
+  }
+
+  // Recent Form & Schedule
+  if (dataContext.recentMatchesAvg < 5) {
+    warnings.push("Insufficient recent form data");
+    dataQualityPts -= 10;
+    rawPenaltyAcc -= 0.05;
+  }
+  if (!dataContext.hasVenueData) {
+    warnings.push("Missing solid venue form");
+    dataQualityPts -= 10;
+  }
+  if (!dataContext.hasRealScheduleStrength) {
+    warnings.push("Schedule strength defaulting to neutral");
+    dataQualityPts -= 5;
+  }
+
+  // Cap limitante de castigos (max -15%)
+  const dataIntegrityPenalty = Math.max(-0.15, rawPenaltyAcc);
+  dataQualityPts = Math.max(40, dataQualityPts);
+
+  // Regla estructurada para LimitedData
+  const limitedData = dataQualityPts <= 70 || (dataContext.h2hIsStale && !dataContext.hasVenueData);
+
+  // 2. Acuerdo de Modelos en Escala Diseñada
+  let modelAgreementPts = 100;
   let divergencePenalty = 0;
+  
   if (poissonP && weightedP) {
-    const pMaxHome = Math.round(poissonP.home  * 100);
-    const pMaxDraw = Math.round(poissonP.draw  * 100);
-    const pMaxAway = Math.round(poissonP.away  * 100);
-    const wMaxHome = Math.round(weightedP.home * 100);
-    const wMaxDraw = Math.round(weightedP.draw * 100);
-    const wMaxAway = Math.round(weightedP.away * 100);
-    const divergence = Math.max(
-      Math.abs(pMaxHome - wMaxHome),
-      Math.abs(pMaxDraw - wMaxDraw),
-      Math.abs(pMaxAway - wMaxAway)
-    );
-    if (divergence > 12) {
-      divergencePenalty = -(divergence * 0.005); // 0.5% por punto de divergencia
-      console.log(`[Predictor] [M5] Model divergence=${divergence}pts → confidence penalty=${(divergencePenalty * 100).toFixed(1)}%`);
+    const pMaxH = poissonP.home * 100, pMaxD = poissonP.draw * 100, pMaxA = poissonP.away * 100;
+    const wMaxH = weightedP.home * 100, wMaxD = weightedP.draw * 100, wMaxA = weightedP.away * 100;
+    const divergence = Math.max(Math.abs(pMaxH - wMaxH), Math.abs(pMaxD - wMaxD), Math.abs(pMaxA - wMaxA));
+
+    if (divergence > 3) {
+        modelAgreementPts = Math.round(Math.max(40, 100 - ((divergence - 3) * 2.8))); 
+        if (divergence > 12) {
+          divergencePenalty = -0.04;
+          warnings.push(`High model divergence (${divergence.toFixed(0)}pts)`);
+        }
     }
   }
 
-  const raw = maxP * 0.40 + ((hCons + aCons) / 2) * 0.25 + sample * 0.20 + posDiff * 0.10 + sourceBonus + formPenalty + divergencePenalty;
-  const pct = Math.round(Math.max(45, Math.min(92, raw * 100))); // mínimo 45% [M5]
+  // 3. Fórmula Final Cruda (Reducido maxP de 0.40 a 0.30 para frenar optimismo innato)
+  const raw = maxP * 0.30 + ((hCons + aCons) / 2) * 0.25 + h2hSampleBonus + posDiff * 0.10 + sourceBonus + dataIntegrityPenalty + divergencePenalty + 0.10;
+  
+  const pct = Math.round(Math.max(40, Math.min(92, raw * 100)));
   const margin = Math.round(Math.max(4, Math.min(18, 28 - pct * 0.22)));
-  const level = pct >= 72 ? 'high' : pct >= 55 ? 'medium' : 'low';
-  return { pct, level, margin };
+  const level = pct >= 70 ? 'high' : pct >= 52 ? 'medium' : 'low';
+
+  // 4. Retorno Compatible Público
+  return { pct, level, margin, dataQuality: dataQualityPts, modelAgreement: modelAgreementPts, limitedData, warnings };
 }
 
 /* ─────────────────────────────────────────
@@ -595,10 +631,15 @@ async function analyze(homeId, awayId, ligaId = 'PL', lang = 'es') {
   const maxP = Math.max(probs.home, probs.draw, probs.away);
   const risk = maxP >= 56 ? 'low' : maxP >= 45 ? 'medium' : 'high';
 
-  // [M5] Pasar modelos crudos para detectar divergencia
-  const conf = confidence(probs, homeFinal, awayFinal, h2h, fuentesUsadas, ligaId, poissonP, weightedP);
-  // El insight se construye en el frontend con I18n.buildInsight() usando los datos crudos.
-  // El backend no genera texto para evitar duplicación de traducciones.
+  // [M5] Pasar modelos crudos y contexto honesto para detectar divergencia
+  const dataContext = {
+    h2hIsStale: h2h?.source === 'fallback' || (!h2h?.source && (h2h?.hw === 2 && h2h?.d === 1 && h2h?.aw === 2)),
+    hasVenueData: (homeFinal.venueForm?.matches >= 3) && (awayFinal.venueForm?.matches >= 3),
+    hasRealScheduleStrength: false, // [FASE 3B pendiente]
+    recentMatchesAvg: ((homeEnriched.recentForm?.matches || 0) + (awayEnriched.recentForm?.matches || 0)) / 2
+  };
+
+  const conf = confidence(probs, homeFinal, awayFinal, h2h, fuentesUsadas, ligaId, poissonP, weightedP, dataContext);
 
   console.log(`[Prediction] ✅ Completado | Fuentes: ${fuentesUsadas} | Probs: ${probs.home}/${probs.draw}/${probs.away} | xG: ${goals.home}-${goals.away}`);
 
