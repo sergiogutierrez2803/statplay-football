@@ -344,36 +344,17 @@ function confidence(probs, home, away, h2h, fuentesUsadas, ligaId, poissonP = nu
 }
 
 /* ─────────────────────────────────────────
-   [M1] Opponent strength factor
-   Pondera la forma reciente según la calidad de los rivales enfrentados.
-   Fuente: posición actual en tabla (ya disponible en DB, sin llamadas extra).
-
-   Lógica:
-     rival top 25%    → multiplicador 1.15 (ganar a equipos top vale más)
-     rival mitad      → multiplicador 1.00 (neutro)
-     rival bottom 25% → multiplicador 0.90 (ganar a equipos débiles vale menos)
-
-   Se aplica sobre el winRate de la forma reciente antes de mezclar con histórico.
+   [M1] FASE 3A: Schedule Strength Crítico Inmediato
+   Saneamiento del "rich-get-richer proxy". Hasta la Fase 3B, esta función 
+   retornará incondicionalmente un 1.00 honesto, neutralizando
+   el over-fitting sin romper la estructura actual del promise/callback.
 ───────────────────────────────────────── */
-async function _opponentStrengthFactor(ligaId) {
-  try {
-    const [rows] = await pool.query(
-      'SELECT COUNT(*) as total FROM equipos WHERE liga_id = ?', [ligaId]
-    );
-    const total = rows[0]?.total || 20;
-    const top    = Math.ceil(total * 0.25);  // top 25%
-    const bottom = Math.floor(total * 0.75); // bottom 25% empieza aquí
-
-    // Devuelve función que recibe posición del rival y retorna multiplicador continuo
-    return (rivalPos) => {
-      if (!rivalPos) return 1.00;
-      // Escala continua entre 1.15 (pos 1) y 0.90 (pos total)
-      const relativePos = (rivalPos - 1) / (total - 1); // 0.0 (top) -> 1.0 (bottom)
-      const factor = 1.15 - (relativePos * 0.25);      // 1.15 -> 0.90
-      return +factor.toFixed(2);
-    };
-  } catch (e) {
-  }
+async function _calculateScheduleStrength(ligaId) {
+  // En Fase 3B conectaremos a la DB cruzada para re-introducir
+  // opponentsAvgPos. Por ahora, sanidad matemática.
+  return (recentOpponentsAvgPos = null) => {
+    return 1.00; // Neutro puro
+  };
 }
 
 /**
@@ -427,7 +408,7 @@ function calculatePower(home, away, goals, ligaId) {
    role: 'home' | 'away' — determina qué stats de venue usar
    opponentFactor: función (rivalPos) → multiplicador [M1]
 ───────────────────────────────────────── */
-async function enrichWithRecentForm(teamData, fdTeamId, role = 'home', opponentFactor = null) {
+async function enrichWithRecentForm(teamData, fdTeamId, role = 'home', scheduleFactor = null) {
   if (!fdTeamId) {
     console.log(`[Recent Form] No fd_id for ${teamData.name} — using DB history only`);
     return teamData;
@@ -442,19 +423,20 @@ async function enrichWithRecentForm(teamData, fdTeamId, role = 'home', opponentF
 
     const src = recent.source === 'db_cache' ? 'cache' : 'API';
 
-    /* [M1] Opponent strength factor — ajusta winRate según calidad de rivales.
-       opponentFactor es una función (rivalPos) → multiplicador, generada por
-       _opponentStrengthFactor(). Si no se pasa, factor=1.00 (neutro). */
-    const factor = opponentFactor ? opponentFactor(teamData.pos) : 1.00;
+    /* [M1] Fase 3A: Integración del scheduleStrength validado
+       Neutralizamos proxies agresivos. El factor será 1.00 exacto. */
+    const factor = scheduleFactor ? scheduleFactor(null) : 1.00;
     const adjustedWinRate = Math.min(1, Math.max(0, recent.winRate * factor));
     if (factor !== 1.00) {
-      console.log(`[Recent Form] [M1] Opponent factor=${factor.toFixed(2)} → winRate ${recent.winRate.toFixed(2)} → ${adjustedWinRate.toFixed(2)} for ${teamData.name}`);
+      console.log(`[Recent Form] [M1] S.Factor=${factor.toFixed(2)} → winRate ${recent.winRate.toFixed(2)} → ${adjustedWinRate.toFixed(2)} for ${teamData.name}`);
     }
 
     console.log(`[Recent Form] Applied to ${teamData.name} (${role}) from ${src}: form=${recent.form.join('-')} GF=${recent.avgGoalsFor} GA=${recent.avgGoalsAgainst}`);
 
-    const W_RECENT = 0.60;
-    const W_HIST   = 0.40;
+    // [FASE 3A] Multiplicador Base Prudente de Forma Reciente
+    const baseFormWeight = 0.40; // Estrictamente rebajado de 0.60
+    const W_RECENT = Math.max(0.30, Math.min(0.50, baseFormWeight * factor)); 
+    const W_HIST   = +(1 - W_RECENT).toFixed(2);
 
     if (role === 'home') {
       return {
@@ -509,9 +491,9 @@ async function applyVenueAdjustment(homeData, awayData, homeFdId, awayFdId) {
   let home = { ...homeData, venueForm: homeVenue };
   let away = { ...awayData, venueForm: awayVenue };
 
-  if (homeVenue && homeVenue.matches >= 2) {
-    // Ajuste suave: 20% venue + 80% datos ya enriquecidos
-    const V = 0.20;
+  // [FASE 3A] Escudo Anti-Ruido de Localía (cap 10%, min 3 matches)
+  if (homeVenue && homeVenue.matches >= 3) {
+    const V = 0.10;
     home = {
       ...home,
       homeGoalsFor:     +(home.homeGoalsFor     * (1 - V) + homeVenue.avgGoalsFor     * V).toFixed(2),
@@ -522,8 +504,8 @@ async function applyVenueAdjustment(homeData, awayData, homeFdId, awayFdId) {
     console.log(`[Predictor] ${homeData.name} ajuste casa: xGF=${home.homeGoalsFor} xGA=${home.homeGoalsAgainst} winRate=${home.homeWinRate}`);
   }
 
-  if (awayVenue && awayVenue.matches >= 2) {
-    const V = 0.20;
+  if (awayVenue && awayVenue.matches >= 3) {
+    const V = 0.10;
     away = {
       ...away,
       awayGoalsFor:     +(away.awayGoalsFor     * (1 - V) + awayVenue.avgGoalsFor     * V).toFixed(2),
@@ -570,12 +552,12 @@ async function analyze(homeId, awayId, ligaId = 'PL', lang = 'es') {
 
 
   // 3. Enriquecer con forma reciente (cache DB → FD API como fallback)
-  // [M1] Calcular opponent strength factor usando posición del rival en tabla
+  // [M1] Calcular schedule strength
   console.log(`[Prediction] Recent form: consultando cache DB primero...`);
-  const opponentFactor = await _opponentStrengthFactor(ligaId);
+  const scheduleFactor = await _calculateScheduleStrength(ligaId);
   const [homeEnriched, awayEnriched] = await Promise.all([
-    enrichWithRecentForm(homeData, homeEq?.fd_id, 'home', opponentFactor),
-    enrichWithRecentForm(awayData, awayEq?.fd_id, 'away', opponentFactor),
+    enrichWithRecentForm(homeData, homeEq?.fd_id, 'home', scheduleFactor),
+    enrichWithRecentForm(awayData, awayEq?.fd_id, 'away', scheduleFactor),
   ]);
 
   // 4. Ajuste por venue (cache DB → FD API como fallback)
