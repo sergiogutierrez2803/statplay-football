@@ -149,6 +149,11 @@ function expectedGoals(home, away, h2h, ligaId) {
   }
   */
 
+  // [FASE 2.1] Regresión conservadora a la media para evitar expansión excesiva del xG por multiplicación de señales recientes
+  const REGRESSION = 0.15;
+  xGH = (xGH * (1 - REGRESSION)) + (safeHomeAvg * REGRESSION);
+  xGA = (xGA * (1 - REGRESSION)) + (safeAwayAvg * REGRESSION);
+
   xGH = Math.max(0.35, Math.min(3.5, xGH));
   xGA = Math.max(0.35, Math.min(3.5, xGA));
   return { home: +xGH.toFixed(2), away: +xGA.toFixed(2), total: +(xGH + xGA).toFixed(2) };
