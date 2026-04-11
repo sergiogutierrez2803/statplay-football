@@ -641,6 +641,11 @@ async function analyze(homeId, awayId, ligaId = 'PL', lang = 'es') {
 
   const conf = confidence(probs, homeFinal, awayFinal, h2h, fuentesUsadas, ligaId, poissonP, weightedP, dataContext);
 
+  if (process.env.DEBUG_PREDICTOR === 'true') {
+    console.log('[Confidence Debug]', JSON.stringify(conf, null, 2));
+    console.log('[DataContext Debug]', JSON.stringify(dataContext, null, 2));
+  }
+
   console.log(`[Prediction] ✅ Completado | Fuentes: ${fuentesUsadas} | Probs: ${probs.home}/${probs.draw}/${probs.away} | xG: ${goals.home}-${goals.away}`);
 
   return {
