@@ -212,6 +212,7 @@ async function _getFormFromCache(fdTeamId, venue = 'all') {
       winRate:         parseFloat(row.win_rate),
       drawRate:        parseFloat(row.draw_rate),
       lossRate:        parseFloat(row.loss_rate),
+      scheduleStrength: parseFloat(row.schedule_strength || 1.00),
       source:          'db_cache',
       venue,
     };
@@ -223,22 +224,23 @@ async function _getFormFromCache(fdTeamId, venue = 'all') {
 
 async function _saveFormToCache(fdTeamId, venue, data) {
   try {
+    const sStrength = data.scheduleStrength || 1.00;
     await pool.query(`
       INSERT INTO recent_form_cache
         (fd_team_id, venue, matches, wins, draws, losses, goals_for, goals_against,
-         avg_gf, avg_ga, form_str, win_rate, draw_rate, loss_rate)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         avg_gf, avg_ga, form_str, win_rate, draw_rate, loss_rate, schedule_strength)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE
         matches=VALUES(matches), wins=VALUES(wins), draws=VALUES(draws),
         losses=VALUES(losses), goals_for=VALUES(goals_for),
         goals_against=VALUES(goals_against), avg_gf=VALUES(avg_gf),
         avg_ga=VALUES(avg_ga), form_str=VALUES(form_str),
         win_rate=VALUES(win_rate), draw_rate=VALUES(draw_rate),
-        loss_rate=VALUES(loss_rate), updated_at=CURRENT_TIMESTAMP
+        loss_rate=VALUES(loss_rate), schedule_strength=VALUES(schedule_strength), updated_at=CURRENT_TIMESTAMP
     `, [
       fdTeamId, venue, data.matches, data.wins, data.draws, data.losses,
       data.goalsFor, data.goalsAgainst, data.avgGoalsFor, data.avgGoalsAgainst,
-      data.form.join('-'), data.winRate, data.drawRate, data.lossRate
+      data.form.join('-'), data.winRate, data.drawRate, data.lossRate, sStrength
     ]);
     console.log(`[Recent Form] Cache updated fd_id=${fdTeamId} venue=${venue} form=${data.form.join('-')}`);
   } catch (e) {
@@ -275,10 +277,15 @@ async function getTeamRecentForm(fdTeamId, limit = 5) {
   let goalsFor = 0, goalsAgainst = 0;
   const formArray = [];
 
+  const opponentIds = [];
+
   for (const m of matches) {
     const isHome = m.homeTeam.id === fdTeamId;
     const scored   = isHome ? (m.score?.fullTime?.home ?? 0) : (m.score?.fullTime?.away ?? 0);
     const conceded = isHome ? (m.score?.fullTime?.away ?? 0) : (m.score?.fullTime?.home ?? 0);
+
+    const oppId = isHome ? m.awayTeam.id : m.homeTeam.id;
+    if (oppId) opponentIds.push(oppId);
 
     goalsFor     += scored;
     goalsAgainst += conceded;
@@ -286,6 +293,29 @@ async function getTeamRecentForm(fdTeamId, limit = 5) {
     if (scored > conceded)        { wins++;   formArray.push('W'); }
     else if (scored === conceded)  { draws++;  formArray.push('D'); }
     else                           { losses++; formArray.push('L'); }
+  }
+
+  // [FASE 3B] True Schedule Strength
+  let scheduleStrength = 1.00;
+  if (opponentIds.length > 0) {
+    try {
+      const uniqueOppIds = [...new Set(opponentIds)]; 
+      const [oppRows] = await pool.query(`
+        SELECT e.pos, 
+               (SELECT COUNT(*) FROM equipos e2 WHERE e2.liga_id = e.liga_id) as total_teams
+        FROM equipos e
+        WHERE e.fd_id IN (?) AND e.pos IS NOT NULL
+      `, [uniqueOppIds]);
+
+      if (oppRows.length === uniqueOppIds.length && oppRows[0].total_teams) {
+        const totalTeams = oppRows[0].total_teams;
+        const avgPos = oppRows.reduce((sum, row) => sum + row.pos, 0) / oppRows.length;
+        const relativePos = (avgPos - 1) / (totalTeams - 1); 
+        scheduleStrength = +(1.08 - (relativePos * 0.16)).toFixed(2);
+      }
+    } catch (e) {
+      console.warn('[Schedule] Error DB calculando schedule_strength:', e.message);
+    }
   }
 
   const n = matches.length;
@@ -297,6 +327,7 @@ async function getTeamRecentForm(fdTeamId, limit = 5) {
     winRate:         +(wins   / n).toFixed(2),
     drawRate:        +(draws  / n).toFixed(2),
     lossRate:        +(losses / n).toFixed(2),
+    scheduleStrength,
     source:          'football-data.org',
   };
 
@@ -342,9 +373,14 @@ async function getTeamFormByVenue(fdTeamId, venue = 'home', limit = 5) {
   let goalsFor = 0, goalsAgainst = 0;
   const formArray = [];
 
+  const opponentIds = [];
+
   for (const m of filtered) {
     const scored   = venue === 'home' ? (m.score?.fullTime?.home ?? 0) : (m.score?.fullTime?.away ?? 0);
     const conceded = venue === 'home' ? (m.score?.fullTime?.away ?? 0) : (m.score?.fullTime?.home ?? 0);
+
+    const oppId = venue === 'home' ? m.awayTeam.id : m.homeTeam.id;
+    if (oppId) opponentIds.push(oppId);
 
     goalsFor     += scored;
     goalsAgainst += conceded;
@@ -352,6 +388,29 @@ async function getTeamFormByVenue(fdTeamId, venue = 'home', limit = 5) {
     if (scored > conceded)        { wins++;   formArray.push('W'); }
     else if (scored === conceded)  { draws++;  formArray.push('D'); }
     else                           { losses++; formArray.push('L'); }
+  }
+
+  // [FASE 3B] Venue True Schedule Strength
+  let scheduleStrength = 1.00;
+  if (opponentIds.length > 0) {
+    try {
+      const uniqueOppIds = [...new Set(opponentIds)]; 
+      const [oppRows] = await pool.query(`
+        SELECT e.pos, 
+               (SELECT COUNT(*) FROM equipos e2 WHERE e2.liga_id = e.liga_id) as total_teams
+        FROM equipos e
+        WHERE e.fd_id IN (?) AND e.pos IS NOT NULL
+      `, [uniqueOppIds]);
+
+      if (oppRows.length === uniqueOppIds.length && oppRows[0].total_teams) {
+        const totalTeams = oppRows[0].total_teams;
+        const avgPos = oppRows.reduce((sum, row) => sum + row.pos, 0) / oppRows.length;
+        const relativePos = (avgPos - 1) / (totalTeams - 1); 
+        scheduleStrength = +(1.08 - (relativePos * 0.16)).toFixed(2);
+      }
+    } catch (e) {
+      console.warn(`[Schedule] Error DB calculando schedule_strength venue=${venue}:`, e.message);
+    }
   }
 
   const n = filtered.length;
@@ -363,6 +422,7 @@ async function getTeamFormByVenue(fdTeamId, venue = 'home', limit = 5) {
     winRate:         +(wins   / n).toFixed(2),
     drawRate:        +(draws  / n).toFixed(2),
     lossRate:        +(losses / n).toFixed(2),
+    scheduleStrength,
     source:          'football-data.org',
   };
 

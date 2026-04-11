@@ -379,19 +379,7 @@ function confidence(probs, home, away, h2h, fuentesUsadas, ligaId, poissonP = nu
   return { pct, level, margin, dataQuality: dataQualityPts, modelAgreement: modelAgreementPts, limitedData, warnings };
 }
 
-/* ─────────────────────────────────────────
-   [M1] FASE 3A: Schedule Strength Crítico Inmediato
-   Saneamiento del "rich-get-richer proxy". Hasta la Fase 3B, esta función 
-   retornará incondicionalmente un 1.00 honesto, neutralizando
-   el over-fitting sin romper la estructura actual del promise/callback.
-───────────────────────────────────────── */
-async function _calculateScheduleStrength(ligaId) {
-  // En Fase 3B conectaremos a la DB cruzada para re-introducir
-  // opponentsAvgPos. Por ahora, sanidad matemática.
-  return (recentOpponentsAvgPos = null) => {
-    return 1.00; // Neutro puro
-  };
-}
+
 
 /**
  * [Fase 5] Calcula métricas de poder (0-100) para visualizaciones.
@@ -442,9 +430,8 @@ function calculatePower(home, away, goals, ligaId) {
    Enriquecer datos de equipo con forma reciente real de FD
    Ponderación: 60% forma reciente FD + 40% histórico DB
    role: 'home' | 'away' — determina qué stats de venue usar
-   opponentFactor: función (rivalPos) → multiplicador [M1]
 ───────────────────────────────────────── */
-async function enrichWithRecentForm(teamData, fdTeamId, role = 'home', scheduleFactor = null) {
+async function enrichWithRecentForm(teamData, fdTeamId, role = 'home') {
   if (!fdTeamId) {
     console.log(`[Recent Form] No fd_id for ${teamData.name} — using DB history only`);
     return teamData;
@@ -459,9 +446,8 @@ async function enrichWithRecentForm(teamData, fdTeamId, role = 'home', scheduleF
 
     const src = recent.source === 'db_cache' ? 'cache' : 'API';
 
-    /* [M1] Fase 3A: Integración del scheduleStrength validado
-       Neutralizamos proxies agresivos. El factor será 1.00 exacto. */
-    const factor = scheduleFactor ? scheduleFactor(null) : 1.00;
+    /* [FASE 3B] Integración del scheduleStrength Real extraído del caché DB */
+    const factor = recent.scheduleStrength || 1.00;
     const adjustedWinRate = Math.min(1, Math.max(0, recent.winRate * factor));
     if (factor !== 1.00) {
       console.log(`[Recent Form] [M1] S.Factor=${factor.toFixed(2)} → winRate ${recent.winRate.toFixed(2)} → ${adjustedWinRate.toFixed(2)} for ${teamData.name}`);
@@ -469,7 +455,7 @@ async function enrichWithRecentForm(teamData, fdTeamId, role = 'home', scheduleF
 
     console.log(`[Recent Form] Applied to ${teamData.name} (${role}) from ${src}: form=${recent.form.join('-')} GF=${recent.avgGoalsFor} GA=${recent.avgGoalsAgainst}`);
 
-    // [FASE 3A] Multiplicador Base Prudente de Forma Reciente
+    // [FASE 3A/3B] Multiplicador Base Prudente de Forma Reciente
     const baseFormWeight = 0.40; // Estrictamente rebajado de 0.60
     const W_RECENT = Math.max(0.30, Math.min(0.50, baseFormWeight * factor)); 
     const W_HIST   = +(1 - W_RECENT).toFixed(2);
@@ -588,12 +574,10 @@ async function analyze(homeId, awayId, ligaId = 'PL', lang = 'es') {
 
 
   // 3. Enriquecer con forma reciente (cache DB → FD API como fallback)
-  // [M1] Calcular schedule strength
   console.log(`[Prediction] Recent form: consultando cache DB primero...`);
-  const scheduleFactor = await _calculateScheduleStrength(ligaId);
   const [homeEnriched, awayEnriched] = await Promise.all([
-    enrichWithRecentForm(homeData, homeEq?.fd_id, 'home', scheduleFactor),
-    enrichWithRecentForm(awayData, awayEq?.fd_id, 'away', scheduleFactor),
+    enrichWithRecentForm(homeData, homeEq?.fd_id, 'home'),
+    enrichWithRecentForm(awayData, awayEq?.fd_id, 'away'),
   ]);
 
   // 4. Ajuste por venue (cache DB → FD API como fallback)
@@ -631,11 +615,17 @@ async function analyze(homeId, awayId, ligaId = 'PL', lang = 'es') {
   const maxP = Math.max(probs.home, probs.draw, probs.away);
   const risk = maxP >= 56 ? 'low' : maxP >= 45 ? 'medium' : 'high';
 
+  // [FASE 3B] Detección estricta y transparente de contextos reales
+  const homeScheduleReal = !!(homeEnriched.recentForm?.scheduleStrength && homeEnriched.recentForm.scheduleStrength !== 1.00);
+  const awayScheduleReal = !!(awayEnriched.recentForm?.scheduleStrength && awayEnriched.recentForm.scheduleStrength !== 1.00);
+
   // [M5] Pasar modelos crudos y contexto honesto para detectar divergencia
   const dataContext = {
     h2hIsStale: h2h?.source === 'fallback' || (!h2h?.source && (h2h?.hw === 2 && h2h?.d === 1 && h2h?.aw === 2)),
     hasVenueData: (homeFinal.venueForm?.matches >= 3) && (awayFinal.venueForm?.matches >= 3),
-    hasRealScheduleStrength: false, // [FASE 3B pendiente]
+    homeScheduleReal,
+    awayScheduleReal,
+    hasRealScheduleStrength: homeScheduleReal && awayScheduleReal, // Solo true si AMBOS son reales
     recentMatchesAvg: ((homeEnriched.recentForm?.matches || 0) + (awayEnriched.recentForm?.matches || 0)) / 2
   };
 
