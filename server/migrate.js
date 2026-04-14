@@ -218,6 +218,88 @@ const migrations = [
         `);
       }
     }
+  },
+  {
+    name: 'create_ss_team_stats',
+    sql: `
+      CREATE TABLE IF NOT EXISTS ss_team_stats (
+        id              INT AUTO_INCREMENT PRIMARY KEY,
+        equipo_id       INT,
+        liga_id         VARCHAR(10) NOT NULL,
+        team_name_raw   VARCHAR(150) NOT NULL,
+        season          VARCHAR(10)  NOT NULL DEFAULT '2024/25',
+      
+        avg_corners_home  DECIMAL(5,2) DEFAULT NULL,
+        avg_corners_away  DECIMAL(5,2) DEFAULT NULL,
+        avg_corners_total DECIMAL(5,2) DEFAULT NULL,
+      
+        btts_pct          DECIMAL(5,2) DEFAULT NULL,
+        over15_pct        DECIMAL(5,2) DEFAULT NULL,
+        over25_pct        DECIMAL(5,2) DEFAULT NULL,
+        over35_pct        DECIMAL(5,2) DEFAULT NULL,
+        avg_goals_scored  DECIMAL(5,2) DEFAULT NULL,
+        avg_goals_conceded DECIMAL(5,2) DEFAULT NULL,
+      
+        form_last5        VARCHAR(15) DEFAULT NULL,
+        form_last10       VARCHAR(30) DEFAULT NULL,
+      
+        source            VARCHAR(30) NOT NULL DEFAULT 'soccerstats',
+        source_url        VARCHAR(500) DEFAULT NULL,
+        scraped_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      
+        UNIQUE KEY uq_ss_team_season (liga_id, team_name_raw, season),
+        INDEX idx_ss_team_equipo_id (equipo_id),
+        INDEX idx_ss_team_liga (liga_id),
+        INDEX idx_ss_team_updated (updated_at),
+        FOREIGN KEY (liga_id) REFERENCES ligas(id)
+      )
+    `
+  },
+  {
+    name: 'create_ss_league_summary',
+    sql: `
+      CREATE TABLE IF NOT EXISTS ss_league_summary (
+        id              INT AUTO_INCREMENT PRIMARY KEY,
+        liga_id         VARCHAR(10) NOT NULL,
+        season          VARCHAR(10) NOT NULL DEFAULT '2024/25',
+      
+        avg_goals_per_match   DECIMAL(5,2) DEFAULT NULL,
+        btts_pct_league       DECIMAL(5,2) DEFAULT NULL,
+        over25_pct_league     DECIMAL(5,2) DEFAULT NULL,
+        avg_corners_per_match DECIMAL(5,2) DEFAULT NULL,
+        avg_cards_per_match   DECIMAL(5,2) DEFAULT NULL,
+        total_matches_scraped INT          DEFAULT 0,
+      
+        source      VARCHAR(30)  NOT NULL DEFAULT 'soccerstats',
+        source_url  VARCHAR(500) DEFAULT NULL,
+        scraped_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      
+        UNIQUE KEY uq_ss_league_season (liga_id, season),
+        FOREIGN KEY (liga_id) REFERENCES ligas(id)
+      )
+    `
+  },
+  {
+    name: 'create_ss_team_name_map',
+    sql: `
+      CREATE TABLE IF NOT EXISTS ss_team_name_map (
+        id              INT AUTO_INCREMENT PRIMARY KEY,
+        ss_name         VARCHAR(150) NOT NULL,
+        equipo_id       INT NOT NULL,
+        liga_id         VARCHAR(10) NOT NULL,
+        confidence      ENUM('exact','fuzzy','manual') NOT NULL DEFAULT 'manual',
+        notes           VARCHAR(255) DEFAULT NULL,
+        created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      
+        UNIQUE KEY uq_ss_name_liga (ss_name, liga_id),
+        INDEX idx_ss_map_equipo (equipo_id),
+        FOREIGN KEY (liga_id)    REFERENCES ligas(id),
+        FOREIGN KEY (equipo_id)  REFERENCES equipos(id)
+      )
+    `
   }
 ];
 

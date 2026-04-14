@@ -18,6 +18,7 @@
 const pool   = require('./db');
 const { getH2H } = require('./sync');
 const { getTeamRecentForm, getTeamFormByVenue } = require('./footballdata');
+const { getSoccerStatsContext } = require('./scrapers/ss-service');
 const Logger = require('./logger');
 
 /* ── Promedios de goles por liga (temporada actual) ── */
@@ -600,6 +601,10 @@ async function analyze(homeId, awayId, ligaId = 'PL', lang = 'es') {
   const h2h = await getH2H(homeId, awayId);
   console.log(`[Prediction] H2H source: ${h2h.source || 'api'} | ${h2h.hw}W-${h2h.d}D-${h2h.aw}L`);
 
+  // 6. SoccerStats — Consumo PASIVO (Fase 6.1)
+  const ssContext = await getSoccerStatsContext({ homeId, awayId, leagueId: ligaId });
+  console.log(`[Prediction] SoccerStats context: ${ssContext.usable ? 'OK' : 'Skipped'} (${ssContext.reason})`);
+
   // Cálculos con datos finales (enriquecidos + ajuste venue)
   const goals     = expectedGoals(homeFinal, awayFinal, h2h, ligaId);
   const poissonP  = poissonProbs(goals.home, goals.away);
@@ -610,8 +615,23 @@ async function analyze(homeId, awayId, ligaId = 'PL', lang = 'es') {
 
   const over25 = Math.round((1 - poisson(goals.total, 0) - poisson(goals.total, 1) - poisson(goals.total, 2)) * 100);
   const btts   = Math.round((1 - poisson(goals.home, 0)) * (1 - poisson(goals.away, 0)) * 100);
-  const cornersTotal = homeFinal.avgCorners + awayFinal.avgCorners;
-  const corners = +Math.max(6, Math.min(16, cornersTotal)).toFixed(1);
+  
+  let corners;
+  let cornersSource = 'heuristic';
+  console.log('[Corners Debug] flag=', process.env.SOCCERSTATS_USE_CORNERS);
+console.log('[Corners Debug] usable=', ssContext?.usable);
+console.log('[Corners Debug] reason=', ssContext?.reason);
+console.log('[Corners Debug] home=', ssContext?.home?.avg_corners_total);
+console.log('[Corners Debug] away=', ssContext?.away?.avg_corners_total);
+  if (process.env.SOCCERSTATS_USE_CORNERS === 'true' && ssContext.usable && ssContext.home?.avg_corners_total != null && ssContext.away?.avg_corners_total != null) {
+    cornersSource = 'soccerstats';
+	console.log('[Corners Debug] source=soccerstats');
+    corners = +((parseFloat(ssContext.home.avg_corners_total) + parseFloat(ssContext.away.avg_corners_total)) / 2).toFixed(1);
+  } else {
+    const cornersTotal = homeFinal.avgCorners + awayFinal.avgCorners;
+	console.log('[Corners Debug] source=heuristic');
+    corners = +Math.max(6, Math.min(16, cornersTotal)).toFixed(1);
+  }
 
   const maxP = Math.max(probs.home, probs.draw, probs.away);
   const risk = maxP >= 56 ? 'low' : maxP >= 45 ? 'medium' : 'high';
@@ -649,8 +669,10 @@ async function analyze(homeId, awayId, ligaId = 'PL', lang = 'es') {
     over25,
     btts,
     corners,
+    cornersSource,
     risk,
     confidence:    conf,
+    soccerStatsContext: ssContext, // Inyección pasiva
     insight:       null, // generado en frontend por I18n.buildInsight()
     advanced:      calculatePower(homeFinal, awayFinal, goals, ligaId),
     fuentesUsadas,

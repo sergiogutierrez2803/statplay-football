@@ -108,6 +108,10 @@ app.use('/api/predict', predictLimiter);
 app.use('/api/upcoming', upcomingLimiter);
 app.use('/api/sync', authLimiter); // Sync requiere auth admin
 
+/* ── SoccerStats Scraper routes ── */
+app.use('/api/internal', require('./routes/internal'));
+app.use('/api/admin/scrape', require('./routes/admin-scrape'));
+
 const PORT = process.env.PORT || 3000;
 
 /* ── Ligas válidas — whitelist para validar el parámetro ?liga= ── */
@@ -486,6 +490,8 @@ app.get('/api/predict/:homeId/:awayId', async (req, res) => {
       over25:        result.over25,
       btts:          result.btts,
       corners:       result.corners,
+	  cornersSource: result.cornersSource,
+      soccerStatsContext: result.soccerStatsContext,
       risk:          result.risk,
       confidence:    result.confidence,
       insight:       result.insight,

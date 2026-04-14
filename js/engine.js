@@ -28,6 +28,13 @@ const LEAGUE_AVGS = {
 const PredictionEngine = {
 
   async analyze(homeTeam, awayTeam, wcOptions = {}, backendPrediction = null) {
+    // 0. Determinar liga activa primero para inicializar el contexto (Phase 1 Fix)
+    const leagueKey = AppState.currentLeague || 'PL';
+    const leagueAvg = LEAGUE_AVGS[leagueKey] || LEAGUE_AVGS.PL;
+    LEAGUE.homeAvg = leagueAvg.homeAvg;
+    LEAGUE.awayAvg = leagueAvg.awayAvg;
+    LEAGUE.base    = leagueAvg.base;
+
     // Si la data viene precargada desde el backend canónico, actuar como adaptador (Phase 1)
     if (backendPrediction && backendPrediction.probs) {
       return this._adaptBackendData(backendPrediction);
@@ -35,12 +42,6 @@ const PredictionEngine = {
 
     const h2h = await ApiService.getH2H(homeTeam.id, awayTeam.id);
 
-    // Seleccionar promedios de liga correctos según la liga activa
-    const leagueKey = AppState.currentLeague || 'PL';
-    const leagueAvg = LEAGUE_AVGS[leagueKey] || LEAGUE_AVGS.PL;
-    LEAGUE.homeAvg = leagueAvg.homeAvg;
-    LEAGUE.awayAvg = leagueAvg.awayAvg;
-    LEAGUE.base    = leagueAvg.base;
 
     // [FASE 7] World Cup: sin ventaja local, H2H reducido
     if (wcOptions.noHomeAdvantage) {
@@ -210,7 +211,8 @@ const PredictionEngine = {
   },
 
   _expectedCorners(home, away) {
-    return +((home.avgCorners + away.avgCorners) / 2).toFixed(1);
+    const total = (home.avgCorners || 5.0) + (away.avgCorners || 5.0);
+    return +Math.max(6, Math.min(16, total)).toFixed(1);
   },
 
   /* ── Risk ── */

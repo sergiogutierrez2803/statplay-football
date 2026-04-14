@@ -8,6 +8,7 @@ const pool = require('./db');
 const { syncAllData }  = require('./sync');
 const { runCleanup }   = require('./cleanup');
 const { runBackup }    = require('./backup');
+const { runScraping }  = require('./scrapers/ss-orchestrator');
 
 /* ─────────────────────────────────────────
    Health check interno — verifica DB y estado de caches
@@ -68,10 +69,20 @@ function initCron() {
     await runBackup();
   }, { timezone: 'America/Bogota' });
 
+  // SoccerStats Scraper — 06:15 AM diario
+  cron.schedule('15 6 * * *', async () => {
+    console.log('[Cron] Iniciando scraping de SoccerStats (06:15 AM)');
+    try {
+      await runScraping(null);
+    } catch (err) {
+      console.error('[Cron] Fallo en tarea SoccerStats:', err.message);
+    }
+  }, { timezone: 'America/Bogota' });
+
   // Health check al arrancar (después de 10s para dar tiempo a la DB)
   setTimeout(runHealthCheck, 10000);
 
-  console.log('[Cron] Tareas: sync 03h | cleanup dom 04h | backup 05h | health check 12h');
+  console.log('[Cron] Tareas: sync 03h | cleanup dom 04h | backup 05h | ss 06h | health check 12h');
 }
 
 module.exports = { initCron, runHealthCheck };
