@@ -16,11 +16,11 @@ const useSSL =
   process.env.DB_SSL === 'true';
 
 const pool = mysql.createPool({
-  host: process.env.MYSQLHOST,
-  port: process.env.MYSQLPORT || 3306,
-  user: process.env.MYSQLUSER,
-  password: process.env.MYSQL_ROOT_PASSWORD,
-  database: process.env.MYSQLDATABASE,
+  host:     process.env.MYSQLHOST || process.env.DB_HOST || 'localhost',
+  port:     process.env.MYSQLPORT || process.env.DB_PORT || 3306,
+  user:     process.env.MYSQLUSER || process.env.DB_USER,
+  password: process.env.MYSQL_ROOT_PASSWORD || process.env.DB_PASS,
+  database: process.env.MYSQLDATABASE || process.env.DB_NAME,
 
   waitForConnections: true,
   connectionLimit: 10,
@@ -31,11 +31,13 @@ const pool = mysql.createPool({
   ...(useSSL ? { ssl: { rejectUnauthorized: false } } : {}),
 });
 
-// DEBUG REAL
-console.log('[DB CONFIG]', {
-  host: process.env.MYSQLHOST,
-  user: process.env.MYSQLUSER,
-  database: process.env.MYSQLDATABASE,
+// DEBUG REAL PARA AUDITORÍA
+console.log('[DB-AUDIT] Configuración cargada:', {
+  env_host: process.env.MYSQLHOST || process.env.DB_HOST || 'localhost',
+  env_user: process.env.MYSQLUSER || process.env.DB_USER || 'root',
+  env_db:   process.env.MYSQLDATABASE || process.env.DB_NAME,
+  env_port: process.env.MYSQLPORT || process.env.DB_PORT || 3306,
+  source:   process.env.MYSQLHOST ? 'RAILWAY' : (process.env.DB_HOST ? '.ENV' : 'DEFAULT')
 });
 
 module.exports = pool;

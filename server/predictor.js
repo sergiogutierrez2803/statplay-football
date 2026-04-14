@@ -610,7 +610,8 @@ async function analyze(homeId, awayId, ligaId = 'PL', lang = 'es') {
 
   const over25 = Math.round((1 - poisson(goals.total, 0) - poisson(goals.total, 1) - poisson(goals.total, 2)) * 100);
   const btts   = Math.round((1 - poisson(goals.home, 0)) * (1 - poisson(goals.away, 0)) * 100);
-  const corners = +((homeFinal.avgCorners + awayFinal.avgCorners) / 2).toFixed(1);
+  const cornersTotal = homeFinal.avgCorners + awayFinal.avgCorners;
+  const corners = +Math.max(6, Math.min(16, cornersTotal)).toFixed(1);
 
   const maxP = Math.max(probs.home, probs.draw, probs.away);
   const risk = maxP >= 56 ? 'low' : maxP >= 45 ? 'medium' : 'high';

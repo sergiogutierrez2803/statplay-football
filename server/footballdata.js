@@ -307,7 +307,12 @@ async function getTeamRecentForm(fdTeamId, limit = 5) {
         WHERE e.fd_id IN (?) AND e.pos IS NOT NULL
       `, [uniqueOppIds]);
 
-      if (oppRows.length === uniqueOppIds.length && oppRows[0].total_teams) {
+      // Relajar la restricción: si hay al menos un rival de liga local, promediar su dificultad.
+      // SQL ya filtró automáticamente los rivales de Copas Internacionales o Nacionales.
+      if (oppRows.length > 0 && oppRows[0].total_teams) {
+        if (oppRows.length < uniqueOppIds.length) {
+          console.log(`[Schedule] fd_id=${fdTeamId} jugó copas. Promediando schedule_strength sobre ${oppRows.length} rivales locales (dejando fuera ${uniqueOppIds.length - oppRows.length}).`);
+        }
         const totalTeams = oppRows[0].total_teams;
         const avgPos = oppRows.reduce((sum, row) => sum + row.pos, 0) / oppRows.length;
         const relativePos = (avgPos - 1) / (totalTeams - 1); 
@@ -402,7 +407,10 @@ async function getTeamFormByVenue(fdTeamId, venue = 'home', limit = 5) {
         WHERE e.fd_id IN (?) AND e.pos IS NOT NULL
       `, [uniqueOppIds]);
 
-      if (oppRows.length === uniqueOppIds.length && oppRows[0].total_teams) {
+      if (oppRows.length > 0 && oppRows[0].total_teams) {
+        if (oppRows.length < uniqueOppIds.length) {
+          console.log(`[Schedule] fd_id=${fdTeamId} venue=${venue} jugó copas. Promediando schedule_strength sobre ${oppRows.length} rivales locales.`);
+        }
         const totalTeams = oppRows[0].total_teams;
         const avgPos = oppRows.reduce((sum, row) => sum + row.pos, 0) / oppRows.length;
         const relativePos = (avgPos - 1) / (totalTeams - 1); 

@@ -25,13 +25,13 @@ async function runBackup() {
   const fileName = `statplay_backup_${timestamp}.sql`;
   const filePath = path.join(BACKUP_DIR, fileName);
 
-  const host = process.env.DB_HOST;
-  const user = process.env.DB_USER;
-  const pass = process.env.DB_PASS;
-  const db   = process.env.DB_NAME;
+  const host = process.env.MYSQLHOST;
+  const user = process.env.MYSQLUSER;
+  const pass = process.env.MYSQL_ROOT_PASSWORD;
+  const db   = process.env.MYSQLDATABASE;
 
   if (!host || !user || !db) {
-    Logger.error('[Backup] Faltan variables de entorno para el respaldo (DB_HOST, DB_USER, DB_NAME)');
+    Logger.error('[Backup] Faltan variables de entorno para el respaldo (MYSQLHOST, MYSQLUSER, MYSQLDATABASE)');
     return null;
   }
 

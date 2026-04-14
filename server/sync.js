@@ -235,7 +235,9 @@ async function syncFromAPIFootball(ligaId, apiLeagueId) {
     const avgCorners      = +(6.8 - rankRatio * 2.2).toFixed(1);  // 6.8 (top) → 4.6 (bottom)
     const h1ScoringRatio  = +(0.46 - rankRatio * 0.08).toFixed(2); // 0.46 (top) → 0.38 (bottom)
 
-    await pool.query(`
+    console.log(`[Rank Sync] ${team.name} (pos:${rank}) -> avgCorners:${avgCorners}`);
+
+    const [writeResult] = await pool.query(`
       INSERT INTO estadisticas
         (equipo_id, forma, h_win_rate, h_draw_rate, a_win_rate, a_draw_rate,
          h_gf, h_ga, a_gf, a_ga, avg_corners, h1_scoring_ratio, fuente)
@@ -250,6 +252,8 @@ async function syncFromAPIFootball(ligaId, apiLeagueId) {
         h_ga        = VALUES(h_ga),
         a_gf        = VALUES(a_gf),
         a_ga        = VALUES(a_ga),
+        avg_corners = VALUES(avg_corners),
+        h1_scoring_ratio = VALUES(h1_scoring_ratio),
         fuente      = 'apif'
     `, [
       team.id, formaRaw,
@@ -263,6 +267,16 @@ async function syncFromAPIFootball(ligaId, apiLeagueId) {
       +((away?.goals?.against || 0) / aP).toFixed(2),
       avgCorners, h1ScoringRatio
     ]);
+
+    // AUDITORÍA DE ESCRITURA
+    process.stdout.write(`[DB-WRITE] ${team.name}: OK (affected:${writeResult.affectedRows}, changed:${writeResult.changedRows})\n`);
+
+    // VERIFICACIÓN DE LECTURA (Limitada a los 2 primeros equipos para no saturar)
+    if (rank <= 2) {
+      const [readRows] = await pool.query('SELECT avg_corners, h1_scoring_ratio FROM estadisticas WHERE equipo_id = ?', [team.id]);
+      const dbVal = readRows[0]?.avg_corners;
+      console.log(`[AUDIT-READ] ${team.name} en DB -> avg_corners: ${dbVal} (Calculado: ${avgCorners}) ${dbVal == avgCorners ? '✅ coinciden' : '❌ DISCREPANCIA'}`);
+    }
   }
 
   console.log(`[APIF] ${standings.length} equipos con estadísticas para ${ligaId}`);
