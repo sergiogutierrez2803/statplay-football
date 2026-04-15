@@ -613,23 +613,30 @@ async function analyze(homeId, awayId, ligaId = 'PL', lang = 'es') {
   const probs     = blendProbs(poissonP, weightedP, ligaId, goals.home, goals.away, homeFinal, awayFinal);
   const halfTime  = halfTimeBreakdown(goals, homeFinal, awayFinal);
 
-  const over25 = Math.round((1 - poisson(goals.total, 0) - poisson(goals.total, 1) - poisson(goals.total, 2)) * 100);
-  const btts   = Math.round((1 - poisson(goals.home, 0)) * (1 - poisson(goals.away, 0)) * 100);
+  let over25 = Math.round((1 - poisson(goals.total, 0) - poisson(goals.total, 1) - poisson(goals.total, 2)) * 100);
+  let over25Source = 'heuristic';
+  if (process.env.SOCCERSTATS_USE_OVER25 === 'true' && ssContext.usable && ssContext.home?.over25_pct != null && ssContext.away?.over25_pct != null) {
+    const ssSignal = (parseFloat(ssContext.home.over25_pct) + parseFloat(ssContext.away.over25_pct)) / 2;
+    over25 = Math.round(over25 * 0.70 + ssSignal * 0.30);
+    over25Source = 'soccerstats_blend';
+  }
+
+  let btts = Math.round((1 - poisson(goals.home, 0)) * (1 - poisson(goals.away, 0)) * 100);
+  let bttsSource = 'heuristic';
+  if (process.env.SOCCERSTATS_USE_BTTS === 'true' && ssContext.usable && ssContext.home?.btts_pct != null && ssContext.away?.btts_pct != null) {
+    const ssSignal = (parseFloat(ssContext.home.btts_pct) + parseFloat(ssContext.away.btts_pct)) / 2;
+    btts = Math.round(btts * 0.70 + ssSignal * 0.30);
+    bttsSource = 'soccerstats_blend';
+  }
   
   let corners;
   let cornersSource = 'heuristic';
-  console.log('[Corners Debug] flag=', process.env.SOCCERSTATS_USE_CORNERS);
-console.log('[Corners Debug] usable=', ssContext?.usable);
-console.log('[Corners Debug] reason=', ssContext?.reason);
-console.log('[Corners Debug] home=', ssContext?.home?.avg_corners_total);
-console.log('[Corners Debug] away=', ssContext?.away?.avg_corners_total);
+
   if (process.env.SOCCERSTATS_USE_CORNERS === 'true' && ssContext.usable && ssContext.home?.avg_corners_total != null && ssContext.away?.avg_corners_total != null) {
     cornersSource = 'soccerstats';
-	console.log('[Corners Debug] source=soccerstats');
     corners = +((parseFloat(ssContext.home.avg_corners_total) + parseFloat(ssContext.away.avg_corners_total)) / 2).toFixed(1);
   } else {
     const cornersTotal = homeFinal.avgCorners + awayFinal.avgCorners;
-	console.log('[Corners Debug] source=heuristic');
     corners = +Math.max(6, Math.min(16, cornersTotal)).toFixed(1);
   }
 
@@ -667,7 +674,9 @@ console.log('[Corners Debug] away=', ssContext?.away?.avg_corners_total);
     goals,
     halfTime,
     over25,
+    over25Source,
     btts,
+    bttsSource,
     corners,
     cornersSource,
     risk,
