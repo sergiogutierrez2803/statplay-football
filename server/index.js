@@ -14,6 +14,7 @@ const { analyze, savePrediction, advancedMetrics, calculatePower } = require('./
 const { getLogo: getLogoFromMap, getEmoji: getEmojiFromMap } = require('./teamLogoMap');
 const { getFDFixtures }                                     = require('./footballdata');
 const { fdToApif }                                          = require('./teammap');
+const equiposService                                        = require('./services/equiposService');
 const Logger                                                = require('./logger');
 require('dotenv').config();
 
@@ -221,43 +222,67 @@ app.get('/api/standings/:ligaId', async (req, res) => {
           for (const t of dbTeams) dbMap[t.fd_id] = t;
 
           const standings = total.table.map(row => {
-            const db = dbMap[row.team.id];
-            const resolvedLogo  = getLogoFromMap(row.team.name, db?.logo_url, row.team.crest);
-            const resolvedEmoji = db?.emoji || getEmojiFromMap(row.team.name);
-            return {
-              position: row.position,
-              team: {
-                id:        db?.id || row.team.id,
-                name:      row.team.name,
-                shortName: row.team.shortName || row.team.tla || db?.short_name || row.team.name.substring(0,3).toUpperCase(),
-                emoji:     resolvedEmoji,
-                logoUrl:   resolvedLogo,
-                crest:     row.team.crest
-              },
-              played: row.playedGames,
-              won:    row.won,
-              drawn:  row.draw,
-              lost:   row.lost,
-              gf:     row.goalsFor,
-              ga:     row.goalsAgainst,
-              gd:     row.goalDifference,
-              points: row.points,
-              form:   row.form ? row.form.split(',').map(f => f.trim()).filter(Boolean) : [],
-              source: 'football-data.org'
+  const db = dbMap[row.team.id];
+  const resolvedLogo  = getLogoFromMap(row.team.name, db?.logo_url, row.team.crest);
+  const resolvedEmoji = db?.emoji || getEmojiFromMap(row.team.name);
+
+  return {
+    position: row.position,
+    team: {
+      id:        db?.id || null,
+      fd_id:     row.team.id,
+      name:      row.team.name,
+      shortName: row.team.shortName || row.team.tla || db?.short_name || row.team.name.substring(0, 3).toUpperCase(),
+      emoji:     resolvedEmoji,
+      logoUrl:   resolvedLogo,
+      crest:     row.team.crest
+    },
+    played: row.playedGames,
+    won:    row.won,
+    drawn:  row.draw,
+    lost:   row.lost,
+    gf:     row.goalsFor,
+    ga:     row.goalsAgainst,
+    gd:     row.goalDifference,
+    points: row.points,
+    form:   row.form ? row.form.split(',').map(f => f.trim()).filter(Boolean) : [],
+    source: 'football-data.org'
             };
           });
 
-          // Actualizar DB en background con los datos frescos
+          // Actualizar DB en background con los datos frescos (no-destructivo)
           setImmediate(async () => {
             try {
               for (const s of standings) {
-                await pool.query(`
-                  UPDATE equipos SET
-                    pos=?, puntos=?, jugados=?, ganados=?, empatados=?, perdidos=?,
-                    gf=?, ga=?, gd=?
-                  WHERE fd_id=? AND liga_id=?
-                `, [s.position, s.points, s.played, s.won, s.drawn, s.lost,
-                    s.gf, s.ga, s.gd, total.table.find(r=>r.position===s.position)?.team.id, ligaId]);
+                try {
+                  const fdForPos = total.table.find(r => r.position === s.position)?.team.id;
+                  const dbEntry = fdForPos ? dbMap[fdForPos] : null;
+                  // Validar y loguear advertencias si corresponde (no bloqueante)
+                  try {
+                    const equipoToValidate = {
+                      id: dbEntry?.id || fdForPos,
+                      fd_id: fdForPos || null,
+                      nombre: s.team.name,
+                      short_name: s.team.shortName || dbEntry?.short_name || null,
+                      liga_id: ligaId,
+                      fuente: 'fd'
+                    };
+                    const { warnings } = await equiposService.validateEquipoBeforeSave(equipoToValidate, { excludeId: dbEntry?.id || null });
+                    if (warnings && warnings.length) warnings.forEach(w => console.warn(`[EquiposService][standings-bg] ${w}`));
+                  } catch (e) {
+                    console.warn('[EquiposService][standings-bg] validate error:', e.message);
+                  }
+
+                  await pool.query(`
+                    UPDATE equipos SET
+                      pos=?, puntos=?, jugados=?, ganados=?, empatados=?, perdidos=?,
+                      gf=?, ga=?, gd=?
+                    WHERE fd_id=? AND liga_id=?
+                  `, [s.position, s.points, s.played, s.won, s.drawn, s.lost,
+                      s.gf, s.ga, s.gd, fdForPos, ligaId]);
+                } catch (inner) {
+                  /* ignore per-team background error */
+                }
               }
             } catch (e) { /* background update — ignorar errores */ }
           });
@@ -601,13 +626,19 @@ function _fallbackLogo(ligaId) {
 (async () => {
   try {
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id           INT AUTO_INCREMENT PRIMARY KEY,
-        email        VARCHAR(255) UNIQUE,
-        is_premium   BOOLEAN DEFAULT false,
-        created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_users_email (email)
-      )
+       CREATE TABLE IF NOT EXISTS users (
+    id                               INT AUTO_INCREMENT PRIMARY KEY,
+    email                            VARCHAR(255) UNIQUE,
+    is_premium                       BOOLEAN DEFAULT false,
+    plan                             VARCHAR(20) NOT NULL DEFAULT 'free',
+    premium_expires_at               DATETIME NULL,
+    payment_provider                 VARCHAR(50) NULL,
+    payment_provider_customer_id     VARCHAR(255) NULL,
+    payment_provider_subscription_id VARCHAR(255) NULL,
+    session_token                    VARCHAR(255) NULL,
+    created_at                       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_users_email (email)
+  )
     `);
     console.log('[Auth] Tabla users lista.');
   } catch (e) {
@@ -641,7 +672,18 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
 
     // Buscar usuario existente
     const [existing] = await pool.query(
-      'SELECT id, email, is_premium, created_at FROM users WHERE email = ?',
+      `SELECT
+     id,
+     email,
+     is_premium,
+     plan,
+     premium_expires_at,
+     payment_provider,
+     payment_provider_customer_id,
+     payment_provider_subscription_id,
+     created_at
+   FROM users
+   WHERE email = ?`,
       [cleanEmail]
     );
 
@@ -651,20 +693,34 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
       await pool.query('UPDATE users SET session_token = ? WHERE id = ?', [sessionToken, u.id]);
       return res.json({
         success: true,
-        sessionToken,
-        user: { id: u.id, email: u.email, is_premium: !!u.is_premium, isNew: false },
+  sessionToken,
+  user: {
+    id: u.id,
+    email: u.email,
+    is_premium: !!u.is_premium,
+    plan: u.plan || 'free',
+    premium_expires_at: u.premium_expires_at || null,
+    isNew: false,
+  },
       });
     }
 
     // Usuario nuevo → crear con session_token
     const [result] = await pool.query(
-      'INSERT INTO users (email, is_premium, session_token) VALUES (?, false, ?)',
-      [cleanEmail, sessionToken]
+      'INSERT INTO users (email, is_premium, plan, session_token) VALUES (?, false, ?, ?)',
+  [cleanEmail, 'free', sessionToken]
     );
     return res.status(201).json({
-      success: true,
-      sessionToken,
-      user: { id: result.insertId, email: cleanEmail, is_premium: false, isNew: true },
+       success: true,
+  sessionToken,
+  user: {
+    id: result.insertId,
+    email: cleanEmail,
+    is_premium: false,
+    plan: 'free',
+    premium_expires_at: null,
+    isNew: true,
+  },
     });
 
   } catch (e) {
@@ -705,7 +761,7 @@ app.get('/api/auth/me', authLimiter, async (req, res) => {
       const numId = parseInt(id, 10);
       if (!numId) return res.status(400).json({ success: false, message: 'id inválido' });
       [rows] = await pool.query(
-        'SELECT id, email, is_premium, created_at FROM users WHERE id = ?',
+        'SELECT id, email, is_premium, plan, premium_expires_at, created_at FROM users WHERE id = ?',
         [numId]
       );
     }

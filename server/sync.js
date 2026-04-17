@@ -16,6 +16,7 @@ const axios  = require('axios');
 const pool   = require('./db');
 const { getFDStandings, getFDFixtures, getFDTeams } = require('./footballdata');
 const { fdToApif, apifToFd, matchByName }           = require('./teammap');
+const equiposService = require('./services/equiposService');
 require('dotenv').config();
 
 const API_KEY  = process.env.FOOTBALL_API_KEY;
@@ -97,34 +98,50 @@ async function syncFromFD(ligaId) {
       continue;
     }
 
-    // Actualizar standings y guardar fd_id + logo de FD
-    // IMPORTANTE: FD tiene datos actuales (2025/26), sobreescribir pos/puntos siempre
-    // También actualizar nombre con el de FD (más oficial)
-    await pool.query(`
-      UPDATE equipos SET
-        fd_id      = ?,
-        nombre_fd  = ?,
-        nombre     = ?,
-        pos        = ?,
-        puntos     = ?,
-        jugados    = ?,
-        ganados    = ?,
-        empatados  = ?,
-        perdidos   = ?,
-        gf         = ?,
-        ga         = ?,
-        gd         = ?,
-        logo_url   = COALESCE(logo_url, ?),
-        fuente     = 'fd'
-      WHERE id = ?
-    `, [
-      row.fd_id, row.name, row.name,
-      row.position, row.points, row.played,
-      row.won, row.drawn, row.lost,
-      row.gf, row.ga, row.gd,
-      row.crest,
-      apifId
-    ]);
+    // Validar antes de escribir: política no-destructiva
+    try {
+      const equipoToValidate = {
+        id: apifId,
+        fd_id: row.fd_id || null,
+        nombre: row.name,
+        nombre_fd: row.name,
+        short_name: null,
+        liga_id: ligaId,
+        fuente: 'fd'
+      };
+      const { ok, errors, warnings, normalizedEquipo } = await equiposService.validateEquipoBeforeSave(equipoToValidate, { excludeId: apifId });
+      if (warnings && warnings.length) warnings.forEach(w => console.warn(`[EquiposService][syncFromFD] ${w}`));
+      if (errors && errors.length) errors.forEach(e => console.warn(`[EquiposService][syncFromFD][ERROR] ${e}`));
+
+      const fdParam = normalizedEquipo.fd_id ?? null;
+      await pool.query(`
+        UPDATE equipos SET
+          fd_id      = COALESCE(?, fd_id),
+          nombre_fd  = ?,
+          nombre     = ?,
+          pos        = ?,
+          puntos     = ?,
+          jugados    = ?,
+          ganados    = ?,
+          empatados  = ?,
+          perdidos   = ?,
+          gf         = ?,
+          ga         = ?,
+          gd         = ?,
+          logo_url   = COALESCE(logo_url, ?),
+          fuente     = 'fd'
+        WHERE id = ?
+      `, [
+        fdParam, row.name, row.name,
+        row.position, row.points, row.played,
+        row.won, row.drawn, row.lost,
+        row.gf, row.ga, row.gd,
+        row.crest,
+        apifId
+      ]);
+    } catch (e) {
+      console.warn('[EquiposService] validate/write error in syncFromFD:', e.message);
+    }
 
     // Actualizar forma si viene de FD
     if (row.form && row.form.length > 0) {
@@ -198,6 +215,23 @@ async function syncFromAPIFootball(ligaId, apiLeagueId) {
     const home = s.home;
     const away = s.away;
 
+    // Validar equipo APIF antes de upsert (no-destructivo)
+    let shortNameParam = team.code || team.name.substring(0, 3).toUpperCase();
+    try {
+      const equipoToValidate = {
+        id: team.id,
+        nombre: team.name,
+        short_name: shortNameParam,
+        liga_id: ligaId,
+        fuente: 'apif'
+      };
+      const { warnings, normalizedEquipo } = await equiposService.validateEquipoBeforeSave(equipoToValidate, { excludeId: team.id });
+      if (warnings && warnings.length) warnings.forEach(w => console.warn(`[EquiposService][syncFromAPIFootball] ${w}`));
+      shortNameParam = normalizedEquipo.short_name || null;
+    } catch (e) {
+      console.warn('[EquiposService] validate error in syncFromAPIFootball:', e.message);
+    }
+
     // Upsert equipo con datos de APIF (si no existe ya desde FD)
     await pool.query(`
       INSERT INTO equipos (id, nombre, short_name, emoji, liga_id, pos, puntos,
@@ -209,7 +243,7 @@ async function syncFromAPIFootball(ligaId, apiLeagueId) {
         puntos   = COALESCE(puntos, VALUES(puntos))
     `, [
       team.id, team.name,
-      team.code || team.name.substring(0, 3).toUpperCase(),
+      shortNameParam,
       '⚽', ligaId,
       s.rank, s.points, all.played, all.win, all.draw, all.lose,
       all.goals.for, all.goals.against, s.goalsDiff,

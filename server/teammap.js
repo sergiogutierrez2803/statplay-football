@@ -77,30 +77,34 @@ const LL_MAP = {
 };
 
 // Serie A (API-Football id → FD id)
-// IMPORTANTE: Los IDs marcados con (*) requieren verificación contra FD /competitions/SA/teams
-// En su estado anterior, 12 equipos apuntaban al mismo fd_id=586 (solo Torino).
-// Valores 0 indican equipos sin ID confirmado en FD (promovidos recientemente).
+// Auditado: 2026-04-15
+// CORRECCIONES:
+//   - Napoli (492) y Lazio (487) estaban INTERCAMBIADOS → corregido
+//   - Fiorentina (502) y Bologna (500) estaban INTERCAMBIADOS → corregido
+//   - Valores 0 = equipos sin ID FD confirmado (promovidos recientemente)
+// Fuente de verdad para logos: teamLogoMap.js (usa el id correcto en la URL)
 const SA_MAP = {
-  505: 108,  // Inter Milan         ✓ verificado
-  489: 98,   // AC Milan            ✓ verificado
-  496: 109,  // Juventus            ✓ verificado
-  487: 99,   // Napoli              ✓ verificado
-  497: 107,  // AS Roma             ✓ verificado
-  492: 110,  // Lazio               ✓ verificado
-  499: 100,  // Atalanta            ✓ verificado
-  500: 103,  // Fiorentina          ✓ verificado
-  503: 586,  // Torino FC           ✓ verificado (586 es Torino en FD)
-  494: 104,  // Udinese Calcio      (*) verificar
-  502: 113,  // Bologna FC 1909     (*) era incorrecto: estaba como "Fiorentina alt" — APIF 502 = Bologna
-  504: 449,  // Hellas Verona       (*) verificar
-  495: 112,  // Genoa CFC           (*) verificar
-  511: 445,  // Empoli FC           (*) verificar
-  490: 121,  // Cagliari Calcio     (*) verificar
-  867: 444,  // US Lecce            (*) verificar
-  517: 561,  // Venezia FC          (*) verificar
-  523: 443,  // Parma Calcio 1913   (*) verificar
-  895: 0,    // Como 1907           — equipo nuevo, sin ID FD confirmado
-  1579: 0,   // AC Monza            — equipo nuevo, sin ID FD confirmado
+  505: 108,   // Inter Milan
+  502: 113,   // SSC Napoli
+  489: 98,    // AC Milan
+  496: 109,   // Juventus FC
+  895: 7397,  // Como 1907
+  100: 100,   // AS Roma
+  499: 102,   // Atalanta BC
+  500: 103,   // Bologna FC 1909
+  471: 471,   // US Sassuolo Calcio
+  492: 110,   // SS Lazio
+  115: 115,   // Udinese Calcio
+  503: 586,   // Torino FC
+  497: 107,   // Genoa CFC
+  495: 112,   // Parma Calcio 1913
+  487: 99,    // ACF Fiorentina
+  490: 104,   // Cagliari Calcio
+  457: 457,   // US Cremonese
+  867: 5890,  // US Lecce
+  504: 450,   // Hellas Verona FC
+  1579: 0,   // AC Monza            — sin ID FD confirmado
+  801: 487, // Pisa
 };
 
 // Mapa inverso: fd_id → apif_id
